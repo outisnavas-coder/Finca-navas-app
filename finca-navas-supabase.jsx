@@ -10,7 +10,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
-const G = { deep:"#1B4332",mid:"#2D6A4F",light:"#52B788",pale:"#D8F3DC",beige:"#F5F0E8",beigeD:"#E8DFD0",cream:"#FAFAF7",white:"#FFFFFF",g900:"#1C1917",g700:"#44403C",g500:"#78716C",g300:"#D6D3D1",g100:"#F5F5F4",gold:"#B5860D",goldL:"#FEF3C7",red:"#991B1B",redL:"#FEE2E2",blue:"#1E40AF",blueL:"#DBEAFE" };
+const G = { deep:"#1A1A2E",mid:"#2C2C44",light:"#C9A84C",pale:"#F5EDD0",beige:"#F7F5F0",beigeD:"#E8E4DA",cream:"#FAFAF8",white:"#FFFFFF",g900:"#111118",g700:"#3A3A4A",g500:"#7A7A8A",g300:"#D0CDD8",g100:"#F4F4F6",gold:"#C9A84C",goldL:"#FDF6E3",red:"#991B1B",redL:"#FEE2E2",blue:"#1E40AF",blueL:"#DBEAFE" };
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -27,7 +27,7 @@ const CSS = `
   .nav-lbl{color:rgba(255,255,255,.35);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;padding:6px 20px 3px}
   .nav-item{display:flex;align-items:center;gap:9px;padding:9px 20px;color:rgba(255,255,255,.7);cursor:pointer;font-size:13.5px;transition:all .15s;border-left:3px solid transparent}
   .nav-item:hover{color:#fff;background:rgba(255,255,255,.06)}
-  .nav-item.active{color:#fff;background:rgba(82,183,136,.15);border-left-color:${G.light}}
+  .nav-item.active{color:#fff;background:rgba(201,168,76,.15);border-left-color:${G.light}}
   .sfoot{margin-top:auto;padding:16px 20px;border-top:1px solid rgba(255,255,255,.1)}
   .ubadge{display:flex;align-items:center;gap:9px}
   .uav{width:32px;height:32px;border-radius:50%;background:${G.light};display:flex;align-items:center;justify-content:center;color:${G.deep};font-weight:700;font-size:12px;flex-shrink:0}
@@ -45,7 +45,7 @@ const CSS = `
   .sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:22px}
   .sc{background:#fff;border-radius:13px;padding:18px 20px;border:1px solid ${G.beigeD};display:flex;flex-direction:column;gap:7px;transition:box-shadow .2s}
   .sc:hover{box-shadow:0 4px 18px rgba(27,67,50,.08)}
-  .sc.grn{background:linear-gradient(135deg,${G.deep} 0%,${G.mid} 100%);border-color:transparent}
+  .sc.grn{background:linear-gradient(135deg,${G.deep} 0%,${G.mid} 100%);border-left:3px solid ${G.gold};border-color:transparent}
   .sc.grn .sl,.sc.grn .sv,.sc.grn .si,.sc.grn .str{color:rgba(255,255,255,.9)!important}
   .sc.grn .sv{color:#fff!important}
   .si{font-size:20px}.sl{font-size:10.5px;font-weight:600;color:${G.g500};letter-spacing:.7px;text-transform:uppercase}
@@ -69,7 +69,7 @@ const CSS = `
   .fgrp label{font-size:11.5px;font-weight:600;color:${G.g700};text-transform:uppercase;letter-spacing:.4px}
   .fgrp input,.fgrp select,.fgrp textarea{padding:9px 12px;border:1.5px solid ${G.g300};border-radius:8px;font-size:13.5px;font-family:'DM Sans',sans-serif;color:${G.g900};background:#fff;transition:border-color .15s;outline:none}
   .fgrp input:focus,.fgrp select:focus{border-color:${G.mid}}
-  .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:${G.deep};background-image:radial-gradient(ellipse at 20% 50%,rgba(82,183,136,.15) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(181,134,13,.1) 0%,transparent 50%);padding:20px}
+  .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:${G.deep};background-image:radial-gradient(ellipse at 20% 50%,rgba(201,168,76,.12) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(201,168,76,.08) 0%,transparent 50%);padding:20px}
   .login-card{background:#fff;border-radius:22px;padding:44px 40px;width:100%;max-width:400px;box-shadow:0 40px 80px rgba(0,0,0,.3)}
   .login-logo{text-align:center;margin-bottom:32px}
   .login-emb{width:68px;height:68px;background:${G.deep};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px}
@@ -96,7 +96,7 @@ const CSS = `
   .prog-bar{height:7px;background:${G.beige};border-radius:4px;overflow:hidden;margin-top:5px}
   .prog-fill{height:100%;border-radius:4px;transition:width .8s ease}
   .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px;color:${G.g500}}
-  .spinner{width:32px;height:32px;border:3px solid ${G.beigeD};border-top-color:${G.mid};border-radius:50%;animation:spin .8s linear infinite}
+  .spinner{width:32px;height:32px;border:3px solid ${G.beigeD};border-top-color:${G.gold};border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .toast{position:fixed;bottom:24px;right:24px;background:${G.deep};color:#fff;padding:12px 20px;border-radius:12px;font-size:13.5px;font-weight:500;z-index:999;animation:slideUp .3s ease}
   .toast.error{background:${G.red}}
@@ -139,6 +139,15 @@ function ConfigBanner(){
   </div>;
 }
 
+
+// ─── RR LOGO SVG ─────────────────────────────────────────────────────────────
+function RRLogo({size=32,color="#C9A84C"}){
+  return <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 15 L8 85 L20 85 L20 58 L32 58 L44 85 L58 85 L44 56 C52 53 58 45 58 35 C58 24 49 15 38 15 Z M20 27 L36 27 C42 27 46 31 46 37 C46 43 42 47 36 47 L20 47 Z" fill={color}/>
+    <path d="M56 15 L56 85 L68 85 L68 58 L80 58 L92 85 L106 85 L92 56 C100 53 106 45 106 35 C106 24 97 15 86 15 Z M68 27 L84 27 C90 27 94 31 94 37 C94 43 90 47 84 47 L68 47 Z" fill={color} transform="translate(-8,0) scale(0.88,1)"/>
+  </svg>;
+}
+
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function Login({onLogin}){
   const [email,setEmail]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[loading,setLoading]=useState(false);
@@ -157,8 +166,8 @@ function Login({onLogin}){
 
   return <div className="login-screen"><div className="login-card">
     <div className="login-logo">
-      <div className="login-emb">🌾</div>
-      <h1>Finca Navas</h1>
+      <div className="login-emb" style={{background:"transparent",border:"2px solid #C9A84C"}}><RRLogo size={44}/></div>
+      <h1>Gosh Investment</h1>
       <p>Sistema de Gestión Agropecuaria · Panamá</p>
     </div>
     {!isConfigured&&<div className="linfo">⚙️ App en modo demostración — configura Supabase para activar</div>}
@@ -594,7 +603,7 @@ export default function App(){
     {id:"reportes",label:"Reportes",icon:"📊",group:"Análisis"},
   ];
   const groups=[...new Set(nav.map(n=>n.group))];
-  const titles={dashboard:"Dashboard General",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes"};
+  const titles={dashboard:"Dashboard General",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes & Análisis"};
   const role=user?.perfil?.rol||"encargado";
   const nombre=user?.perfil?.nombre||user?.email||"Usuario";
   const initials=nombre.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
@@ -610,7 +619,7 @@ export default function App(){
     <div className="app">
       {mobile&&sideOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:99}} onClick={()=>setSideOpen(false)}/>}
       <nav className={`sidebar ${!sideOpen?"closed":""}`}>
-        <div className="slogo"><h1>🌾 Finca Navas</h1><span>Sistema Agropecuario · Panamá</span></div>
+        <div className="slogo"><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><RRLogo size={28} color="#C9A84C"/><h1 style={{fontFamily:"'Playfair Display',serif",color:"#fff",fontSize:17,fontWeight:700}}>Gosh Investment</h1></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div>
         <div style={{overflowY:"auto",flex:1}}>
           {groups.map(g=><div key={g} className="nav-sec">
             <div className="nav-lbl">{g}</div>
@@ -653,7 +662,7 @@ export default function App(){
         </main>
 
         <footer>
-          <span style={{fontSize:12,color:G.g500}}>Finca Navas — Sistema de Gestión Agropecuaria · Panamá</span>
+          <span style={{fontSize:12,color:G.g500}}>Gosh Investment — Sistema de Gestión Agropecuaria · Panamá</span>
           <span style={{fontSize:12,color:G.g500}}>{gastos.length} gastos · {ingresos.length} ingresos · Supabase {isConfigured?"✓ conectado":"— pendiente"}</span>
         </footer>
       </div>
