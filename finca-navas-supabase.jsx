@@ -166,7 +166,7 @@ function Login({onLogin}){
 
   return <div className="login-screen"><div className="login-card">
     <div className="login-logo">
-      <div className="login-emb" style={{background:"transparent",border:"none",width:80,height:80}}><img src="/src/Logo.png" style={{width:"100%",height:"100%",objectFit:"contain"}}/></div>
+      <div style={{width:80,height:80,margin:"0 auto 14px"}}><img src="data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEI=" style={{width:"100%",height:"100%",objectFit:"contain"}}/></div>
       <h1>Gosh Investment</h1>
       <p>Sistema de Gestión Agropecuaria · Panamá</p>
     </div>
