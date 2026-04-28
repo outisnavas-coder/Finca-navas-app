@@ -167,9 +167,9 @@ function Login({onLogin}){
 
   return <div className="login-screen"><div className="login-card">
     <div className="login-logo">
-      <div style={{width:80,height:80,margin:"0 auto 14px"}}><svg width="72" height="72" viewBox="0 0 100 100" fill="none"><rect width="100" height="100" rx="50" fill="#2C2C44"/><text x="50" y="65" textAnchor="middle" fill="#C9A84C" fontSize="44" fontWeight="700" fontFamily="serif">RR</text></svg></div>
+      <div style={{width:80,height:80,margin:"0 auto 14px"}}><svg width="80" height="80" viewBox="0 0 100 100"><rect width="100" height="100" rx="50" fill="#2C2C44"/><text x="50" y="65" textAnchor="middle" fill="#C9A84C" fontSize="44" fontWeight="700" fontFamily="serif">RR</text></svg></div>
       <h1>Gosh Investment</h1>
-      <p>Sistema de Gestión Agropecuaria · Panamá</p>
+      <p>Sistema de Gestión GOSH · Panamá</p>
     </div>
     {!isConfigured&&<div className="linfo">⚙️ App en modo demostración — configura Supabase para activar</div>}
     {err&&<div className="lerr">{err}</div>}
@@ -622,7 +622,7 @@ export default function App(){
     <div className="app">
       {mobile&&sideOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:99}} onClick={()=>setSideOpen(false)}/>}
       <nav className={`sidebar ${!sideOpen?"closed":""}`}>
-        <div className="slogo"><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><svg width="28" height="28" viewBox="0 0 100 100" fill="none"><rect width="100" height="100" rx="8" fill="#2C2C44"/><text x="50" y="68" textAnchor="middle" fill="#C9A84C" fontSize="52" fontWeight="700" fontFamily="serif">RR</text></svg><span style={{fontFamily:"'Playfair Display',serif",color:"#fff",fontSize:17,fontWeight:700}}>Gosh Investment</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div>
+        <div className="slogo"><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><svg width="28" height="28" viewBox="0 0 100 100"><rect width="100" height="100" rx="8" fill="#2C2C44"/><text x="50" y="68" textAnchor="middle" fill="#C9A84C" fontSize="52" fontWeight="700" fontFamily="serif">RR</text></svg><span style={{fontFamily:"'Playfair Display',serif",color:"#fff",fontSize:17,fontWeight:700}}>Gosh Investment</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema GOSH · Panamá</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema Agropecuario · Panamá</span></div>
         <div style={{overflowY:"auto",flex:1}}>
           {groups.map(g=><div key={g} className="nav-sec">
             <div className="nav-lbl">{g}</div>
@@ -665,7 +665,7 @@ export default function App(){
         </main>
 
         <footer>
-          <span style={{fontSize:12,color:G.g500}}>Gosh Investment — Sistema de Gestión Agropecuaria · Panamá</span>
+          <span style={{fontSize:12,color:G.g500}}>Gosh Investment — Sistema de Gestión GOSH · Panamá</span>
           <span style={{fontSize:12,color:G.g500}}>{gastos.length} gastos · {ingresos.length} ingresos · Supabase {isConfigured?"✓ conectado":"— pendiente"}</span>
         </footer>
       </div>
