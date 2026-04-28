@@ -166,7 +166,7 @@ function Login({onLogin}){
 
   return <div className="login-screen"><div className="login-card">
     <div className="login-logo">
-      <div className="login-emb" style={{background:"transparent",border:"none",width:80,height:80}}><img src="/Logo.png" style={{width:"100%",height:"100%",objectFit:"contain"}}/></div>
+      <div className="login-emb" style={{background:"transparent",border:"none",width:80,height:80}}><img src="/src/Logo.png" style={{width:"100%",height:"100%",objectFit:"contain"}}/></div>
       <h1>Gosh Investment</h1>
       <p>Sistema de Gestión Agropecuaria · Panamá</p>
     </div>
