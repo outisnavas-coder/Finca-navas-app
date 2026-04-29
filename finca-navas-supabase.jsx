@@ -584,8 +584,8 @@ function CerdosModule({role,toast}){
   const [timelineMeses,setTimelinesMeses]=useState(6);
   const [timelineOffset,setTimelineOffset]=useState(0);
 
-  const fetchPorcino=async()=>{
-    setLoading(true);
+  const fetchPorcino=async(showLoading=true)=>{
+    if(showLoading)setLoading(true);
     const [c,p,m,v,vt]=await Promise.all([
       supabase.from("cerdas").select("*").order("codigo"),
       supabase.from("partos").select("*,cerdas(nombre,codigo)").order("fecha_parto",{ascending:false}),
@@ -595,7 +595,7 @@ function CerdosModule({role,toast}){
     ]);
     setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);
     setVacunas(v.data||[]);setVentas(vt.data||[]);
-    setLoading(false);
+    if(showLoading)setLoading(false);
   };
 
   useEffect(()=>{fetchPorcino();},[]);
@@ -642,7 +642,7 @@ function CerdosModule({role,toast}){
       else{ok=true;toast("Guardado ✓");}
     }catch(e){toast(e.message,"error");}
     finally{setSaving(false);}
-    if(ok){setModal(null);setForm({});fetchPorcino();}
+    if(ok){setModal(null);setForm({});fetchPorcino(false);}
   };
 
   const updateRow=async(tabla,id,datos)=>{
@@ -655,7 +655,7 @@ function CerdosModule({role,toast}){
       else{ok=true;toast("Actualizado ✓");}
     }catch(e){toast(e.message,"error");}
     finally{setSaving(false);}
-    if(ok){setModal(null);setForm({});setEditItem(null);fetchPorcino();}
+    if(ok){setModal(null);setForm({});setEditItem(null);fetchPorcino(false);}
   };
 
   const deleteRow=async(tabla,id)=>{
@@ -663,7 +663,7 @@ function CerdosModule({role,toast}){
     try{
       const {error}=await supabase.from(tabla).delete().eq("id",id);
       if(error)toast(error.message,"error");
-      else{toast("Eliminado ✓");fetchPorcino();}
+      else{toast("Eliminado ✓");fetchPorcino(false);}
     }catch(e){toast(e.message,"error");}
   };
 
