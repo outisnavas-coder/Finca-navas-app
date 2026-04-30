@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 // 👇 Reemplaza con tus credenciales de Supabase
@@ -519,7 +518,15 @@ function Reportes({gastos,ingresos}){
   const cellSt=(v,isTotal)=>({padding:"7px 10px",textAlign:"right",fontWeight:isTotal?700:400,fontSize:isTotal?13:12,color:v<0?G.red:v>0&&isTotal?G.deep:G.g700,background:isTotal?"rgba(201,168,76,0.07)":"transparent",whiteSpace:"nowrap"});
   const fmtCell=v=>v===0?"—":fmt$(v);
 
-  const generarPDF=(mes,anioSel)=>{
+  const generarPDF=async(mes,anioSel)=>{
+    if(!window.jspdf){
+      await new Promise((res,rej)=>{
+        const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        s.onload=res;s.onerror=rej;document.head.appendChild(s);
+      });
+    }
+    const {jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const W=210,M=18;
     const MESES_FULL=["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
