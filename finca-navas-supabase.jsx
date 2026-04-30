@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 // 👇 Reemplaza con tus credenciales de Supabase
@@ -518,10 +519,232 @@ function Reportes({gastos,ingresos}){
   const cellSt=(v,isTotal)=>({padding:"7px 10px",textAlign:"right",fontWeight:isTotal?700:400,fontSize:isTotal?13:12,color:v<0?G.red:v>0&&isTotal?G.deep:G.g700,background:isTotal?"rgba(201,168,76,0.07)":"transparent",whiteSpace:"nowrap"});
   const fmtCell=v=>v===0?"—":fmt$(v);
 
+  const generarPDF=(mes,anioSel)=>{
+    const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const W=210,M=18;
+    const MESES_FULL=["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const hoy=new Date();
+    const mesLabel=mes?`${MESES_FULL[mes]} ${anioSel}`:"Histórico";
+    const gMes=mes?gastos.filter(g=>g.mes===mes&&g.anio===anioSel):gastos;
+    const iMes=mes?ingresos.filter(i=>i.mes===mes&&i.anio===anioSel):ingresos;
+    const tGMes=gMes.reduce((s,x)=>s+Number(x.monto),0);
+    const tIMes=iMes.reduce((s,x)=>s+Number(x.monto),0);
+    const balMes=tIMes-tGMes;
+    const tGHist=gastos.reduce((s,x)=>s+Number(x.monto),0);
+    const tIHist=ingresos.reduce((s,x)=>s+Number(x.monto),0);
+    const balHist=tIHist-tGHist;
+
+    // helpers
+    const hexToRgb=h=>{const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return[r,g,b];};
+    const setFill=h=>{const[r,g,b]=hexToRgb(h);doc.setFillColor(r,g,b);};
+    const setTxt=h=>{const[r,g,b]=hexToRgb(h);doc.setTextColor(r,g,b);};
+    const setDraw=h=>{const[r,g,b]=hexToRgb(h);doc.setDrawColor(r,g,b);};
+
+    let y=0;
+
+    // ── PORTADA ──
+    setFill("#1A1A2E");doc.rect(0,0,W,60,"F");
+    setFill("#C9A84C");doc.rect(0,58,W,3,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(22);setTxt("#FFFFFF");
+    doc.text("FINCA NAVAS",M,28);
+    doc.setFontSize(12);doc.setFont("helvetica","normal");setTxt("#C9A84C");
+    doc.text("INFORME EJECUTIVO DE CIERRE",M,37);
+    doc.setFontSize(10);setTxt("rgba(255,255,255,0.7)");
+    doc.text(mesLabel.toUpperCase(),M,46);
+    doc.setFontSize(9);setTxt("#7A7A8A");
+    doc.text(`Generado: ${hoy.toLocaleDateString("es-PA",{day:"2-digit",month:"long",year:"numeric"})}`,W-M,46,{align:"right"});
+
+    y=75;
+
+    // ── KPIs del MES ──
+    doc.setFont("helvetica","bold");doc.setFontSize(11);setTxt("#1A1A2E");
+    doc.text(`RESUMEN ${mes?"DEL MES":"HISTÓRICO"}: ${mesLabel.toUpperCase()}`,M,y);y+=8;
+    setFill("#F5EDD0");doc.rect(M,y,W-M*2,0.5,"F");y+=6;
+
+    const kpis=[
+      {l:"Ingresos",v:fmt$(tIMes),c:"#1A1A2E"},
+      {l:"Gastos",v:fmt$(tGMes),c:"#991B1B"},
+      {l:"Balance",v:fmt$(balMes),c:balMes>=0?"#0F6E56":"#991B1B"},
+      {l:"ROI",v:tGMes>0?`${((tIMes/tGMes-1)*100).toFixed(1)}%`:"—",c:"#1A1A2E"},
+    ];
+    const kw=(W-M*2)/4;
+    kpis.forEach(({l,v,c},i)=>{
+      const x=M+i*kw;
+      setFill(i%2===0?"#FAFAF8":"#F7F5F0");doc.rect(x,y,kw,22,"F");
+      setDraw("#E8E4DA");doc.rect(x,y,kw,22,"S");
+      doc.setFont("helvetica","normal");doc.setFontSize(8);setTxt("#7A7A8A");
+      doc.text(l.toUpperCase(),x+kw/2,y+7,{align:"center"});
+      doc.setFont("helvetica","bold");doc.setFontSize(13);
+      const[r,g,b]=hexToRgb(c);doc.setTextColor(r,g,b);
+      doc.text(v,x+kw/2,y+17,{align:"center"});
+    });
+    y+=30;
+
+    // ── P&L MES ──
+    doc.setFont("helvetica","bold");doc.setFontSize(11);setTxt("#1A1A2E");
+    doc.text("ESTADO DE RESULTADOS — "+mesLabel.toUpperCase(),M,y);y+=6;
+
+    // Ingresos
+    const catIngBreak={};iMes.forEach(x=>{catIngBreak[x.categoria]=(catIngBreak[x.categoria]||0)+Number(x.monto);});
+    setFill("#F5EDD0");doc.rect(M,y,W-M*2,7,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(9);setTxt("#1A1A2E");
+    doc.text("▲ INGRESOS",M+3,y+5);y+=7;
+    Object.entries(catIngBreak).forEach(([cat,val])=>{
+      doc.setFont("helvetica","normal");doc.setFontSize(8.5);setTxt("#3A3A4A");
+      doc.text(cat,M+6,y+5);
+      setTxt("#1A1A2E");doc.setFont("helvetica","bold");
+      doc.text(fmt$(val),W-M-3,y+5,{align:"right"});
+      setFill("#F4F4F6");doc.rect(M,y,W-M*2,7,"F");
+      setDraw("#E8E4DA");doc.line(M,y+7,W-M,y+7);
+      y+=7;
+    });
+    setFill("#1A1A2E");doc.rect(M,y,W-M*2,8,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(9);setTxt("#FFFFFF");
+    doc.text("TOTAL INGRESOS",M+3,y+5.5);
+    doc.text(fmt$(tIMes),W-M-3,y+5.5,{align:"right"});
+    y+=12;
+
+    // Gastos
+    const catGasBreak={};gMes.forEach(x=>{catGasBreak[x.categoria]=(catGasBreak[x.categoria]||0)+Number(x.monto);});
+    setFill("#FEF2F2");doc.rect(M,y,W-M*2,7,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(9);setTxt("#991B1B");
+    doc.text("▼ GASTOS",M+3,y+5);y+=7;
+    Object.entries(catGasBreak).sort((a,b)=>b[1]-a[1]).forEach(([cat,val])=>{
+      doc.setFont("helvetica","normal");doc.setFontSize(8.5);setTxt("#3A3A4A");
+      doc.text(cat.length>45?cat.slice(0,42)+"...":cat,M+6,y+5);
+      setTxt("#991B1B");doc.setFont("helvetica","bold");
+      doc.text(fmt$(val),W-M-3,y+5,{align:"right"});
+      setFill("#FFFAFA");doc.rect(M,y,W-M*2,7,"F");
+      setDraw("#E8E4DA");doc.line(M,y+7,W-M,y+7);
+      y+=7;
+    });
+    setFill("#991B1B");doc.rect(M,y,W-M*2,8,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(9);setTxt("#FFFFFF");
+    doc.text("TOTAL GASTOS",M+3,y+5.5);
+    doc.text(fmt$(tGMes),W-M-3,y+5.5,{align:"right"});
+    y+=12;
+
+    // Resultado neto
+    setFill(balMes>=0?"#E1F5EE":"#FEE2E2");doc.rect(M,y,W-M*2,12,"F");
+    setDraw(balMes>=0?"#0F6E56":"#991B1B");doc.rect(M,y,W-M*2,12,"S");
+    doc.setFont("helvetica","bold");doc.setFontSize(12);
+    setTxt(balMes>=0?"#0F6E56":"#991B1B");
+    doc.text("RESULTADO NETO",M+4,y+8);
+    doc.text(fmt$(balMes),W-M-4,y+8,{align:"right"});
+    y+=20;
+
+    // ── PÁGINA 2: HISTÓRICO ──
+    if(mes){
+      doc.addPage();
+      setFill("#1A1A2E");doc.rect(0,0,W,18,"F");
+      setFill("#C9A84C");doc.rect(0,17,W,2,"F");
+      doc.setFont("helvetica","bold");doc.setFontSize(14);setTxt("#FFFFFF");
+      doc.text("COMPARATIVO HISTÓRICO",M,12);
+      doc.setFontSize(9);setTxt("#C9A84C");
+      doc.text("FINCA NAVAS",W-M,12,{align:"right"});
+      y=30;
+
+      // KPIs histórico
+      doc.setFont("helvetica","bold");doc.setFontSize(11);setTxt("#1A1A2E");
+      doc.text("ACUMULADO HISTÓRICO (TODOS LOS PERÍODOS)",M,y);y+=8;
+      const kpisH=[
+        {l:"Ingresos Hist.",v:fmt$(tIHist),c:"#1A1A2E"},
+        {l:"Gastos Hist.",v:fmt$(tGHist),c:"#991B1B"},
+        {l:"Balance Hist.",v:fmt$(balHist),c:balHist>=0?"#0F6E56":"#991B1B"},
+        {l:"ROI Hist.",v:tGHist>0?`${((tIHist/tGHist-1)*100).toFixed(1)}%`:"—",c:"#1A1A2E"},
+      ];
+      kpisH.forEach(({l,v,c},i)=>{
+        const x=M+i*kw;
+        setFill(i%2===0?"#FAFAF8":"#F7F5F0");doc.rect(x,y,kw,22,"F");
+        setDraw("#E8E4DA");doc.rect(x,y,kw,22,"S");
+        doc.setFont("helvetica","normal");doc.setFontSize(8);setTxt("#7A7A8A");
+        doc.text(l.toUpperCase(),x+kw/2,y+7,{align:"center"});
+        doc.setFont("helvetica","bold");doc.setFontSize(13);
+        const[r,g,b]=hexToRgb(c);doc.setTextColor(r,g,b);
+        doc.text(v,x+kw/2,y+17,{align:"center"});
+      });
+      y+=30;
+
+      // Tabla comparativa mes vs histórico
+      doc.setFont("helvetica","bold");doc.setFontSize(11);setTxt("#1A1A2E");
+      doc.text(`COMPARATIVO: ${mesLabel.toUpperCase()} vs. HISTÓRICO`,M,y);y+=8;
+      setFill("#1A1A2E");doc.rect(M,y,W-M*2,8,"F");
+      doc.setFont("helvetica","bold");doc.setFontSize(9);setTxt("#FFFFFF");
+      doc.text("Concepto",M+3,y+5.5);
+      doc.text(mesLabel,M+90,y+5.5,{align:"center"});
+      doc.text("Histórico",M+120,y+5.5,{align:"center"});
+      doc.text("Diferencia",W-M-3,y+5.5,{align:"right"});
+      y+=8;
+      const rows=[
+        ["Ingresos",tIMes,tIHist],
+        ["Gastos",tGMes,tGHist],
+        ["Balance",balMes,balHist],
+        ["ROI",tGMes>0?((tIMes/tGMes-1)*100):0,tGHist>0?((tIHist/tGHist-1)*100):0,true],
+      ];
+      rows.forEach(([l,vM,vH,isPct],idx)=>{
+        setFill(idx%2===0?"#FAFAF8":"#FFFFFF");doc.rect(M,y,W-M*2,8,"F");
+        setDraw("#E8E4DA");doc.line(M,y+8,W-M,y+8);
+        doc.setFont("helvetica","normal");doc.setFontSize(9);setTxt("#3A3A4A");
+        doc.text(l,M+3,y+5.5);
+        const fv=v=>isPct?`${v.toFixed(1)}%`:fmt$(v);
+        doc.setFont("helvetica","bold");
+        setTxt(vM<0?"#991B1B":"#1A1A2E");doc.text(fv(vM),M+90,y+5.5,{align:"center"});
+        setTxt(vH<0?"#991B1B":"#1A1A2E");doc.text(fv(vH),M+120,y+5.5,{align:"center"});
+        const diff=vM-vH;setTxt(diff>=0?"#0F6E56":"#991B1B");
+        doc.text((diff>=0?"+":"")+fv(diff),W-M-3,y+5.5,{align:"right"});
+        y+=8;
+      });
+      y+=10;
+
+      // Aportaciones socios
+      doc.setFont("helvetica","bold");doc.setFontSize(11);setTxt("#1A1A2E");
+      doc.text("APORTACIONES POR SOCIO / NEGOCIO",M,y);y+=8;
+      const socAll={Roberto:0,Richard:0,Puercos:0,"Names":0};
+      gMes.forEach(g=>{if(g.pagado_por&&socAll[g.pagado_por]!==undefined)socAll[g.pagado_por]+=Number(g.monto);});
+      const socHAll={Roberto:0,Richard:0,Puercos:0,"Names":0};
+      gastos.forEach(g=>{if(g.pagado_por&&socHAll[g.pagado_por]!==undefined)socHAll[g.pagado_por]+=Number(g.monto);});
+      setFill("#1A1A2E");doc.rect(M,y,W-M*2,8,"F");
+      doc.setFont("helvetica","bold");doc.setFontSize(9);setTxt("#FFFFFF");
+      doc.text("Fuente",M+3,y+5.5);doc.text(mesLabel,M+90,y+5.5,{align:"center"});doc.text("Histórico",W-M-3,y+5.5,{align:"right"});
+      y+=8;
+      Object.entries(socAll).forEach(([s,v],idx)=>{
+        setFill(idx%2===0?"#FDF6E3":"#FFFFFF");doc.rect(M,y,W-M*2,8,"F");
+        setDraw("#E8E4DA");doc.line(M,y+8,W-M,y+8);
+        doc.setFont("helvetica","normal");doc.setFontSize(9);setTxt("#3A3A4A");
+        doc.text(s,M+3,y+5.5);
+        doc.setFont("helvetica","bold");setTxt("#C9A84C");
+        doc.text(v>0?fmt$(v):"—",M+90,y+5.5,{align:"center"});
+        doc.text(socHAll[s]>0?fmt$(socHAll[s]):"—",W-M-3,y+5.5,{align:"right"});
+        y+=8;
+      });
+    }
+
+    // ── PIE DE PÁGINA ──
+    const pages=doc.getNumberOfPages();
+    for(let p=1;p<=pages;p++){
+      doc.setPage(p);
+      setFill("#1A1A2E");doc.rect(0,285,W,12,"F");
+      doc.setFont("helvetica","normal");doc.setFontSize(8);setTxt("#C9A84C");
+      doc.text("FINCA NAVAS — INFORME CONFIDENCIAL",M,292);
+      setTxt("#7A7A8A");doc.text(`Página ${p} de ${pages}`,W-M,292,{align:"right"});
+    }
+
+    doc.save(`FincaNavas_Cierre_${mes?mesLabel.replace(" ","_"):"Historico"}.pdf`);
+  };
+
   return <div>
     {/* Header filtros */}
-    <div className="fl gap2 mb4" style={{flexWrap:"wrap"}}>
-      {["todos",...anos.map(String)].map(a=><button key={a} className={`btn ${anio===a?"btn-p":"btn-o"} btn-sm`} onClick={()=>setAnio(a)}>{a==="todos"?"Todo":a}</button>)}
+    <div className="fl gap2 mb4" style={{flexWrap:"wrap",justifyContent:"space-between"}}>
+      <div className="fl gap2" style={{flexWrap:"wrap"}}>
+        {["todos",...anos.map(String)].map(a=><button key={a} className={`btn ${anio===a?"btn-p":"btn-o"} btn-sm`} onClick={()=>setAnio(a)}>{a==="todos"?"Todo":a}</button>)}
+      </div>
+      <div className="fl gap2">
+        {anio!=="todos"&&<select style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${G.g300}`,fontSize:12,fontFamily:"DM Sans,sans-serif"}} onChange={e=>{const m=Number(e.target.value);if(m)generarPDF(m,Number(anio));}} defaultValue="">
+          <option value="">📥 Exportar mes...</option>
+          {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m,i)=><option key={i} value={i+1}>{m}</option>)}
+        </select>}
+        <button className="btn btn-o btn-sm" onClick={()=>generarPDF(null,null)} style={{borderColor:G.gold,color:G.gold}}>📥 Histórico PDF</button>
+      </div>
     </div>
 
     {/* KPIs globales */}
