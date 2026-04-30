@@ -681,6 +681,27 @@ function CerdosModule({role,toast}){
   vacunas.forEach(v=>{const n=v.cerdas?.nombre||"?";if(!vacunasByCerda[n])vacunasByCerda[n]=[];vacunasByCerda[n].push(v);});
 
   const estadoBadge=(e)=>e==="Activa"?"bg":e==="Muerta"?"br":e==="Vendida"?"bo":"bk";
+  const estadoProduccion=(cerda)=>{
+    if(cerda.estado!=="Activa")return{label:cerda.estado,color:G.g500,bg:G.g100};
+    const cPartos=partos.filter(p=>p.cerda_id===cerda.id).sort((a,b)=>b.fecha_parto.localeCompare(a.fecha_parto));
+    const cMontas=montas.filter(m=>m.cerda_id===cerda.id).sort((a,b)=>b.fecha_monta.localeCompare(a.fecha_monta));
+    const lastParto=cPartos[0];
+    const lastMonta=cMontas[0];
+    if(lastParto){
+      const dp=diffD(lastParto.fecha_parto,TODAY);
+      if(dp>=0&&dp<LACT)return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};
+      if(dp>=LACT&&dp<LACT+DESC)return{label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};
+    }
+    if(lastMonta){
+      const proxParto=addD(lastMonta.fecha_monta,GEST);
+      const dm=diffD(TODAY,proxParto);
+      if(dm>0&&dm<=GEST){
+        const diasGest=GEST-dm;
+        return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
+      }
+    }
+    return{label:"Activa",color:G.deep,bg:G.pale};
+  };
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
@@ -860,11 +881,12 @@ function CerdosModule({role,toast}){
       <div className="card mb4">
         <div className="card-h"><h3>🐷 Cerdas Madres Activas</h3><span className="badge bg">{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").length}</span></div>
         <div className="tw"><table>
-          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Nacimiento</th><th>Edad</th><th>Peso</th><th>Partos</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Producción</th><th>Nacimiento</th><th>Edad</th><th>Peso</th><th>Partos</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=><tr key={c.id}>
             <td style={{fontFamily:"monospace",fontSize:12}}>{c.codigo}</td>
             <td style={{fontWeight:700}}>{c.nombre}</td>
             <td><span className={`badge ${estadoBadge(c.estado)}`}>{c.estado}</span></td>
+            <td>{(()=>{const ep=estadoProduccion(c);return <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:ep.bg,color:ep.color,fontWeight:600,whiteSpace:"nowrap"}}>{ep.label}</span>;})()}</td>
             <td style={{fontSize:12}}>{c.fecha_nacimiento||"-"}</td>
             <td style={{fontSize:12,fontWeight:600,color:G.deep}}>{calcEdad(c.fecha_nacimiento)}</td>
             <td>{c.peso_kg?`${c.peso_kg}kg`:"-"}</td>
@@ -918,14 +940,16 @@ function CerdosModule({role,toast}){
           </div>
         </div>
         <div className="tw"><table>
-          <thead><tr><th>Fecha Monta</th><th>Parto Est. (114d)</th><th>Días restantes</th><th>Confirmado</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Fecha Monta</th><th>Parto Est. (114d)</th><th>Parto Real</th><th>Días restantes</th><th>Confirmado</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{mts.map(m=>{
             const fp=m.fecha_monta?toISO(addD(m.fecha_monta,GEST)):"";
+            const partoReal=partos.find(p=>p.cerda_id===m.cerda_id&&Math.abs(diffD(fp,p.fecha_parto))<=30);
             const dias=fp?diffD(TODAY,fp):null;
             return <tr key={m.id}>
               <td style={{fontWeight:600}}>{fmtDisp(m.fecha_monta)}</td>
               <td style={{color:G.gold,fontWeight:600}}>{fp?fmtDisp(fp):"-"}</td>
-              <td>{dias!==null?<span style={{fontWeight:700,color:dias<0?G.g500:dias<14?G.red:dias<30?G.gold:G.deep}}>{dias<0?"✓ Parido":dias+"d"}</span>:"-"}</td>
+              <td style={{fontWeight:600,color:partoReal?G.deep:G.g300}}>{partoReal?fmtDisp(partoReal.fecha_parto):"-"}</td>
+              <td>{dias!==null?<span style={{fontWeight:700,color:dias<0?G.g500:dias<14?G.red:dias<30?G.gold:G.deep}}>{dias<0?partoReal?"✓ Parto":"No preñada":dias+"d"}</span>:"-"}</td>
               <td><span className={`badge ${m.confirmado?"bg":"bo"}`}>{m.confirmado?"✓ Confirmado":"Pendiente"}</span></td>
               <td style={{fontSize:12,color:G.g500}}>{m.notas||"-"}</td>
               {role==="admin"&&<td style={{display:"flex",gap:4}}>
@@ -1015,6 +1039,45 @@ function CerdosModule({role,toast}){
 
     {/* ── VENTAS ── */}
     {tab==="ventas"&&<div>
+      {/* Resumen por cerda — lechones disponibles */}
+      {(()=>{
+        const porCerda=cerdas.filter(c=>c.tipo==="Madre").map(c=>{
+          const cPartos=partos.filter(p=>p.cerda_id===c.id);
+          const totalNacidos=cPartos.reduce((s,p)=>s+p.lechones_vivos,0);
+          const vendidos=ventas.reduce((s,v)=>s+v.cantidad,0); // global for now
+          return {nombre:c.nombre,nacidos:totalNacidos,partos:cPartos.length};
+        }).filter(c=>c.nacidos>0);
+        const totalNacidos=partos.reduce((s,p)=>s+p.lechones_vivos,0);
+        const totalVendidos=ventas.reduce((s,v)=>s+v.cantidad,0);
+        const disponibles=totalNacidos-totalVendidos;
+        return <div className="card mb4">
+          <div className="card-h"><h3>🐷 Lechones — Resumen</h3></div>
+          <div className="card-b">
+            <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:16}}>
+              <div style={{textAlign:"center",padding:"12px 20px",background:G.pale,borderRadius:8}}>
+                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Total Nacidos</div>
+                <div style={{fontSize:24,fontWeight:700,color:G.deep}}>{totalNacidos}</div>
+              </div>
+              <div style={{textAlign:"center",padding:"12px 20px",background:G.goldL,borderRadius:8}}>
+                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Vendidos</div>
+                <div style={{fontSize:24,fontWeight:700,color:G.gold}}>{totalVendidos}</div>
+              </div>
+              <div style={{textAlign:"center",padding:"12px 20px",background:disponibles>0?"#E1F5EE":G.g100,borderRadius:8}}>
+                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Disponibles</div>
+                <div style={{fontSize:24,fontWeight:700,color:disponibles>0?"#0F6E56":G.g500}}>{disponibles}</div>
+              </div>
+            </div>
+            <div className="tw"><table>
+              <thead><tr><th>Cerda</th><th>Partos</th><th>Lechones Nacidos</th></tr></thead>
+              <tbody>{porCerda.map(c=><tr key={c.nombre}>
+                <td style={{fontWeight:600}}>{c.nombre}</td>
+                <td>{c.partos}</td>
+                <td style={{fontWeight:700,color:G.deep}}>{c.nacidos}</td>
+              </tr>)}</tbody>
+            </table></div>
+          </div>
+        </div>;
+      })()}
       <div className="sg mb4">
         <div className="sc grn"><span className="si">💰</span><span className="sl">Total Ventas</span><span className="sv">{fmt$(totalVentas)}</span></div>
         <div className="sc"><span className="si">🐷</span><span className="sl">Lechones Vendidos</span><span className="sv">{ventas.reduce((s,v)=>s+v.cantidad,0)}</span></div>
