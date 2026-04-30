@@ -1079,17 +1079,20 @@ function CerdosModule({role,toast}){
         </div>;
       })()}
       <div className="sg mb4">
-        <div className="sc grn"><span className="si">💰</span><span className="sl">Total Ventas</span><span className="sv">{fmt$(totalVentas)}</span></div>
-        <div className="sc"><span className="si">🐷</span><span className="sl">Lechones Vendidos</span><span className="sv">{ventas.reduce((s,v)=>s+v.cantidad,0)}</span></div>
-        <div className="sc"><span className="si">📊</span><span className="sl">Precio Promedio</span><span className="sv" style={{fontSize:18}}>{ventas.length>0?fmt$(totalVentas/ventas.reduce((s,v)=>s+v.cantidad,0)):"-"}</span></div>
+        <div className="sc grn"><span className="si">💰</span><span className="sl">Total Ingresos</span><span className="sv">{fmt$(totalVentas)}</span></div>
+        <div className="sc"><span className="si">🐷</span><span className="sl">Venta Lechones</span><span className="sv">{fmt$(ventas.filter(v=>!v.tipo||v.tipo==="Lechon").reduce((s,v)=>s+Number(v.total),0))}</span><span className="str">{ventas.filter(v=>!v.tipo||v.tipo==="Lechon").reduce((s,v)=>s+v.cantidad,0)} vendidos</span></div>
+        <div className="sc"><span className="si">🐄</span><span className="sl">Venta Cerdas</span><span className="sv" style={{fontSize:18}}>{fmt$(ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+Number(v.total),0))}</span></div>
+        <div className="sc"><span className="si">🐗</span><span className="sl">Ingresos Monta</span><span className="sv" style={{fontSize:18}}>{fmt$(ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+Number(v.total),0))}</span></div>
       </div>
       <div className="card">
         <div className="card-h"><h3>🤝 Ventas de Lechones</h3></div>
         <div className="tw"><table>
-          <thead><tr><th>Fecha</th><th>Cantidad</th><th>Precio/u</th><th>Total</th><th>Comprador</th><th>Pago</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Total</th><th>Comprador</th><th>Pago</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{ventas.map(v=><tr key={v.id}>
-            <td>{fmtDisp(v.fecha)}</td><td style={{fontWeight:700}}>{v.cantidad}</td>
-            <td>{fmt$(v.precio_unit)}</td><td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
+            <td>{fmtDisp(v.fecha)}</td>
+            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":"bg"}`}>{v.tipo||"Lechon"}</span></td>
+            <td style={{fontWeight:700}}>{v.cantidad}</td>
+            <td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
             <td>{v.comprador||"-"}</td><td><span className="badge bk">{v.forma_pago||"-"}</span></td>
             <td style={{fontSize:12,color:G.g500}}>{v.notas||"-"}</td>
             {role==="admin"&&<td style={{display:"flex",gap:4}}>
@@ -1211,6 +1214,7 @@ function CerdosModule({role,toast}){
       <div className="fb mb4"><h3>{modal==="edit_venta"?"✏️ Editar Venta":"Nueva Venta"}</h3><button className="btn btn-o btn-sm" onClick={()=>setModal(null)}>✕</button></div>
       <div className="fg">
         <div className="fgrp"><label>Fecha</label><input type="date" value={form.fecha?toISO(form.fecha):""} onChange={e=>setForm(f=>({...f,fecha:e.target.value}))}/></div>
+        <div className="fgrp"><label>Tipo</label><select value={form.tipo||"Lechon"} onChange={e=>setForm(f=>({...f,tipo:e.target.value}))}><option value="Lechon">Lechon</option><option value="Cerda">Cerda</option><option value="Monta">Monta</option></select></div>
         <div className="fgrp"><label>Cantidad</label><input type="number" value={form.cantidad||""} onChange={e=>setForm(f=>({...f,cantidad:e.target.value}))}/></div>
         <div className="fgrp"><label>Precio/u ($)</label><input type="number" step="0.01" value={form.precio_unit||""} onChange={e=>setForm(f=>({...f,precio_unit:e.target.value}))}/></div>
         <div className="fgrp"><label>Comprador</label><input value={form.comprador||""} onChange={e=>setForm(f=>({...f,comprador:e.target.value}))}/></div>
@@ -1220,8 +1224,8 @@ function CerdosModule({role,toast}){
       {form.cantidad&&form.precio_unit&&<p style={{fontSize:13,color:G.deep,fontWeight:700,marginTop:10}}>Total: {fmt$(Number(form.cantidad)*Number(form.precio_unit))}</p>}
       <div className="fl gap2 mt4">
         {modal==="edit_venta"
-          ?<button className="btn btn-p" disabled={saving} onClick={()=>{const{id}=editItem;updateRow("ventas_lechones",id,{fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||""});} }>{saving?"Guardando...":"Guardar cambios"}</button>
-          :<button className="btn btn-p" disabled={saving} onClick={()=>saveNew("ventas_lechones",{fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas})}>{saving?"Guardando...":"Guardar"}</button>
+          ?<button className="btn btn-p" disabled={saving} onClick={()=>{const{id}=editItem;updateRow("ventas_lechones",id,{fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||"",tipo:form.tipo||"Lechon"});} }>{saving?"Guardando...":"Guardar cambios"}</button>
+          :<button className="btn btn-p" disabled={saving} onClick={()=>saveNew("ventas_lechones",{fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas,tipo:form.tipo||"Lechon"})}>{saving?"Guardando...":"Guardar"}</button>
         }
         <button className="btn btn-o" onClick={()=>setModal(null)}>Cancelar</button>
       </div>
