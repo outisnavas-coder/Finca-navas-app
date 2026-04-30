@@ -607,8 +607,7 @@ function Reportes({gastos,ingresos}){
     rows.push(["Fecha","Categoría","Descripción","Módulo","Monto"]);
     iMes.forEach(i=>rows.push([i.fecha,i.categoria,i.descripcion||"—",i.modulo||"—",Number(i.monto)]));
 
-    const csv="﻿"+rows.map(r=>r.map(c=>typeof c==="number"?c:esc(c||"—")).join(",")).join("
-");
+    const csv="\uFEFF"+rows.map(r=>r.map(c=>typeof c==="number"?c:esc(c||"\u2014")).join(",")).join("\n");
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
