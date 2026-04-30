@@ -449,17 +449,50 @@ function Inventario({inventario,onRefresh,role,toast}){
 // ─── REPORTES ─────────────────────────────────────────────────────────────────
 function Reportes({gastos,ingresos}){
   const [anio,setAnio]=useState("todos");
+  const [tabR,setTabR]=useState("pl"); // pl | indicadores | tendencia | socios | categorias
   const gF=anio==="todos"?gastos:gastos.filter(g=>g.anio===Number(anio));
   const iF=anio==="todos"?ingresos:ingresos.filter(i=>i.anio===Number(anio));
   const totG=gF.reduce((s,x)=>s+Number(x.monto),0);
   const totI=iF.reduce((s,x)=>s+Number(x.monto),0);
+  const balance=totI-totG;
+  const margenNeto=totG>0?((balance/totG)*100):0;
+  const roi=totG>0?((totI/totG-1)*100):0;
 
-  const modData=[
-    {label:"Cerdos 🐷",g:gF.filter(x=>x.modulo==="Cerdos").reduce((s,x)=>s+Number(x.monto),0),i:iF.filter(x=>x.modulo==="Cerdos").reduce((s,x)=>s+Number(x.monto),0)},
-    {label:"Ñame 🌿",g:gF.filter(x=>x.modulo==="Ñame").reduce((s,x)=>s+Number(x.monto),0),i:iF.filter(x=>x.modulo==="Ñame").reduce((s,x)=>s+Number(x.monto),0)},
-  ];
+  const anos=[...new Set([...gastos,...ingresos].map(x=>x.anio))].sort((a,b)=>b-a);
+  const MESES=["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // ── P&L data ──
+  const CATS_GAS=["Alimento (Crecimiento)","Alimento (Gestación)","Alimento (Lactancia)","Veterinario y Insumos Medicos","Gastos de Parto","Compra de Lechones (Madres New y Verracos)","Infraestructura","Semilla","Mozos","Supervision de proyecto","Herramientas","Quimicos (Fertilizantes - Pestecidas)","Arado Mecanizado","Otro"];
+  const CATS_ING=["Ingresos por ventas (Lechones)","Ingresos por ventas (Cerdas Madres)","Ingresos por Ñame","Otro"];
+  const anosDisp=anio==="todos"?anos:[Number(anio)];
+  const mesesDisp=Array.from({length:12},(_,i)=>i+1);
+
+  const plIng=CATS_ING.map(cat=>({
+    cat,
+    total:iF.filter(x=>x.categoria===cat).reduce((s,x)=>s+Number(x.monto),0),
+    meses:mesesDisp.map(m=>({m,v:iF.filter(x=>x.categoria===cat&&(anio==="todos"||x.mes===m)).reduce((s,x)=>s+Number(x.monto),0)}))
+  })).filter(r=>r.total>0||anio!=="todos");
+
+  const plGas=CATS_GAS.map(cat=>({
+    cat,
+    total:gF.filter(x=>x.categoria===cat).reduce((s,x)=>s+Number(x.monto),0),
+    meses:mesesDisp.map(m=>({m,v:gF.filter(x=>x.categoria===cat&&(anio==="todos"||x.mes===m)).reduce((s,x)=>s+Number(x.monto),0)}))
+  })).filter(r=>r.total>0||anio!=="todos");
+
+  const plMesTotI=mesesDisp.map(m=>iF.filter(x=>anio==="todos"||x.mes===m).reduce((s,x)=>s+Number(x.monto),0));
+  const plMesTotG=mesesDisp.map(m=>gF.filter(x=>anio==="todos"||x.mes===m).reduce((s,x)=>s+Number(x.monto),0));
+  const plMesTotN=mesesDisp.map((_,i)=>plMesTotI[i]-plMesTotG[i]);
+
+  // socios
   const socioData={Roberto:0,Richard:0,Puercos:0,"Ñames":0};
   gF.forEach(g=>{if(g.pagado_por&&socioData[g.pagado_por]!==undefined)socioData[g.pagado_por]+=Number(g.monto);});
+  const socioMeses=Object.keys(socioData).reduce((acc,s)=>{
+    acc[s]=mesesDisp.map(m=>gF.filter(x=>x.pagado_por===s&&(anio==="todos"||x.mes===m)).reduce((sum,x)=>sum+Number(x.monto),0));
+    return acc;
+  },{});
+  const socMesTot=mesesDisp.map(m=>Object.values(socioMeses).reduce((s,arr)=>s+arr[m-1],0));
+
+  // categorias breakdown
   const catBreak={};gF.forEach(g=>{catBreak[g.categoria]=(catBreak[g.categoria]||0)+Number(g.monto);});
   const catSorted=Object.entries(catBreak).sort((a,b)=>b[1]-a[1]);
   const maxCat=catSorted[0]?.[1]||1;
@@ -469,101 +502,243 @@ function Reportes({gastos,ingresos}){
   const trend=Array.from({length:12},(_,i)=>{
     const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);
     const m=d.getMonth()+1;const y=d.getFullYear();
-    return {lab:`${MONTH_NAMES[m]}'${String(y).slice(2)}`,ing:ingresos.filter(x=>x.mes===m&&x.anio===y).reduce((s,x)=>s+Number(x.monto),0),gas:gastos.filter(x=>x.mes===m&&x.anio===y).reduce((s,x)=>s+Number(x.monto),0)};
+    return {lab:`${MESES[m]}'${String(y).slice(2)}`,ing:ingresos.filter(x=>x.mes===m&&x.anio===y).reduce((s,x)=>s+Number(x.monto),0),gas:gastos.filter(x=>x.mes===m&&x.anio===y).reduce((s,x)=>s+Number(x.monto),0)};
   });
   const maxT=Math.max(...trend.map(d=>Math.max(d.ing,d.gas)),1);
 
-  const anos=[...new Set([...gastos,...ingresos].map(x=>x.anio))].sort((a,b)=>b-a);
+  // indicadores
+  const modCerdos={g:gF.filter(x=>x.modulo==="Cerdos").reduce((s,x)=>s+Number(x.monto),0),i:iF.filter(x=>x.modulo==="Cerdos").reduce((s,x)=>s+Number(x.monto),0)};
+  const modName={g:gF.filter(x=>x.modulo==="Ñame").reduce((s,x)=>s+Number(x.monto),0),i:iF.filter(x=>x.modulo==="Ñame").reduce((s,x)=>s+Number(x.monto),0)};
+  const mesesActivos=trend.filter(t=>t.ing>0||t.gas>0).length||1;
+  const promedioMensualGas=totG/mesesActivos;
+  const promedioMensualIng=totI/mesesActivos;
+  const mesesConBalance=mesesDisp.filter((_,i)=>plMesTotN[i]>0).length;
+  const puntoEquilibrio=totG>0&&totI>0?(totG/(totI/mesesActivos)).toFixed(1):"-";
+
+  const cellSt=(v,isTotal)=>({padding:"7px 10px",textAlign:"right",fontWeight:isTotal?700:400,fontSize:isTotal?13:12,color:v<0?G.red:v>0&&isTotal?G.deep:G.g700,background:isTotal?"rgba(201,168,76,0.07)":"transparent",whiteSpace:"nowrap"});
+  const fmtCell=v=>v===0?"—":fmt$(v);
 
   return <div>
-    <div className="fl gap2 mb4">
+    {/* Header filtros */}
+    <div className="fl gap2 mb4" style={{flexWrap:"wrap"}}>
       {["todos",...anos.map(String)].map(a=><button key={a} className={`btn ${anio===a?"btn-p":"btn-o"} btn-sm`} onClick={()=>setAnio(a)}>{a==="todos"?"Todo":a}</button>)}
     </div>
-    <div className="sg">
+
+    {/* KPIs globales */}
+    <div className="sg" style={{marginBottom:20}}>
       <div className="sc grn"><span className="si">💰</span><span className="sl">Ingresos</span><span className="sv">{fmt$(totI)}</span></div>
       <div className="sc"><span className="si">📤</span><span className="sl">Egresos</span><span className="sv" style={{color:G.red}}>{fmt$(totG)}</span></div>
-      <div className="sc"><span className="si">📊</span><span className="sl">Balance</span><span className="sv" style={{color:totI-totG>=0?G.deep:G.red}}>{fmt$(totI-totG)}</span></div>
-      <div className="sc"><span className="si">💹</span><span className="sl">Margen Rec.</span><span className="sv">{totG>0?((totI/totG)*100).toFixed(1):0}%</span></div>
+      <div className="sc"><span className="si">📊</span><span className="sl">Balance</span><span className="sv" style={{color:balance>=0?G.deep:G.red}}>{fmt$(balance)}</span><span className={`str ${balance<0?"neg":""}`}>{balance>=0?"✓ Positivo":"⚠ Negativo"}</span></div>
+      <div className="sc"><span className="si">💹</span><span className="sl">ROI</span><span className="sv" style={{color:roi>=0?G.deep:G.red}}>{roi.toFixed(1)}%</span><span className="str">retorno sobre inversión</span></div>
+      <div className="sc"><span className="si">📉</span><span className="sl">Margen Neto</span><span className="sv" style={{color:margenNeto>=0?G.deep:G.red}}>{margenNeto.toFixed(1)}%</span></div>
+      <div className="sc"><span className="si">🗓</span><span className="sl">Meses Rentables</span><span className="sv">{mesesConBalance}<span style={{fontSize:14,color:G.g500}}>/12</span></span></div>
     </div>
-    <div className="card mb4">
-      <div className="card-h"><h3>📈 Tendencia Últimos 12 Meses</h3></div>
-      <div className="card-b">
-        <div style={{display:"flex",gap:16,marginBottom:10}}>
-          <span style={{fontSize:11,color:G.g500}}><span style={{display:"inline-block",width:10,height:10,borderRadius:2,background:G.mid,marginRight:3}}></span>Ingresos</span>
-          <span style={{fontSize:11,color:G.g500}}><span style={{display:"inline-block",width:10,height:10,borderRadius:2,background:G.beigeD,marginRight:3}}></span>Gastos</span>
-        </div>
-        <div className="bar-chart" style={{height:160}}>{trend.map((d,i)=><div key={i} className="bar-w"><div style={{display:"flex",alignItems:"flex-end",gap:1,height:140}}><div className="bar" style={{height:`${(d.ing/maxT)*140}px`,background:G.mid}}></div><div className="bar" style={{height:`${(d.gas/maxT)*140}px`,background:G.beigeD}}></div></div><span className="blab" style={{fontSize:9}}>{d.lab}</span></div>)}</div>
+
+    {/* Tabs reportes */}
+    <div className="tabs mb4">
+      {[["pl","📋 P&L"],["indicadores","📐 Indicadores"],["tendencia","📈 Tendencia"],["socios","👥 Socios"],["categorias","🗂 Categorías"]].map(([k,l])=>
+        <button key={k} className={`tab ${tabR===k?"active":""}`} onClick={()=>setTabR(k)}>{l}</button>)}
+    </div>
+
+    {/* ── TAB: P&L ── */}
+    {tabR==="pl"&&<div className="card">
+      <div className="card-h"><h3>📋 Estado de Resultados (P&L)</h3><span style={{fontSize:12,color:G.g500}}>{anio==="todos"?"Histórico":anio}</span></div>
+      <div className="tw"><table style={{fontSize:12}}>
+        <thead><tr>
+          <th style={{minWidth:220}}>Concepto</th>
+          {anio!=="todos"?mesesDisp.map(m=><th key={m} style={{textAlign:"right",minWidth:70}}>{MESES[m]}</th>):<th style={{textAlign:"right"}}>Total</th>}
+          <th style={{textAlign:"right",background:"rgba(201,168,76,0.1)"}}>Total</th>
+        </tr></thead>
+        <tbody>
+          {/* Ingresos */}
+          <tr><td colSpan={anio!=="todos"?14:3} style={{background:G.pale,fontWeight:700,fontSize:12,padding:"6px 10px",color:G.deep}}>▲ INGRESOS</td></tr>
+          {plIng.map(r=><tr key={r.cat}>
+            <td style={{padding:"6px 10px",fontSize:12,color:G.g700,paddingLeft:20}}>{r.cat}</td>
+            {anio!=="todos"?r.meses.map(({m,v})=><td key={m} style={cellSt(v,false)}>{fmtCell(v)}</td>):<td style={cellSt(r.total,false)}>{fmtCell(r.total)}</td>}
+            <td style={cellSt(r.total,true)}>{fmtCell(r.total)}</td>
+          </tr>)}
+          <tr style={{borderTop:`2px solid ${G.beigeD}`}}>
+            <td style={{padding:"8px 10px",fontWeight:700,fontSize:13}}>Total Ingresos</td>
+            {anio!=="todos"?plMesTotI.map((v,i)=><td key={i} style={cellSt(v,true)}>{fmtCell(v)}</td>):<td style={cellSt(totI,true)}>{fmtCell(totI)}</td>}
+            <td style={{...cellSt(totI,true),background:"rgba(27,67,50,0.1)",color:G.deep}}>{fmt$(totI)}</td>
+          </tr>
+          {/* Gastos */}
+          <tr><td colSpan={anio!=="todos"?14:3} style={{background:"#FEF2F2",fontWeight:700,fontSize:12,padding:"6px 10px",color:G.red}}>▼ GASTOS</td></tr>
+          {plGas.map(r=><tr key={r.cat}>
+            <td style={{padding:"6px 10px",fontSize:12,color:G.g700,paddingLeft:20}}>{r.cat}</td>
+            {anio!=="todos"?r.meses.map(({m,v})=><td key={m} style={{...cellSt(0,false),color:v>0?G.red:G.g300}}>{v>0?fmt$(v):"—"}</td>):<td style={{...cellSt(0,false),color:r.total>0?G.red:G.g300}}>{r.total>0?fmt$(r.total):"—"}</td>}
+            <td style={{...cellSt(r.total,true),color:G.red}}>{r.total>0?fmt$(r.total):"—"}</td>
+          </tr>)}
+          <tr style={{borderTop:`2px solid ${G.beigeD}`}}>
+            <td style={{padding:"8px 10px",fontWeight:700,fontSize:13}}>Total Gastos</td>
+            {anio!=="todos"?plMesTotG.map((v,i)=><td key={i} style={{...cellSt(v,true),color:G.red}}>{fmtCell(v)}</td>):<td style={{...cellSt(totG,true),color:G.red}}>{fmtCell(totG)}</td>}
+            <td style={{...cellSt(totG,true),background:"rgba(153,27,27,0.07)",color:G.red}}>{fmt$(totG)}</td>
+          </tr>
+          {/* Total neto */}
+          <tr style={{borderTop:`3px solid ${G.deep}`}}>
+            <td style={{padding:"10px 10px",fontWeight:900,fontSize:14,color:G.deep}}>💰 RESULTADO NETO</td>
+            {anio!=="todos"?plMesTotN.map((v,i)=><td key={i} style={{padding:"10px 10px",textAlign:"right",fontWeight:800,fontSize:13,color:v<0?G.red:v>0?"#0F6E56":G.g500,background:"rgba(201,168,76,0.05)"}}>{v===0?"—":fmt$(v)}</td>):<td style={{padding:"10px",textAlign:"right",fontWeight:800,color:balance<0?G.red:"#0F6E56"}}>{fmt$(balance)}</td>}
+            <td style={{padding:"10px",textAlign:"right",fontWeight:900,fontSize:15,color:balance<0?G.red:"#0F6E56",background:"rgba(201,168,76,0.12)"}}>{fmt$(balance)}</td>
+          </tr>
+          {/* Socios P&L */}
+          <tr><td colSpan={anio!=="todos"?14:3} style={{background:G.goldL,fontWeight:700,fontSize:12,padding:"6px 10px",color:G.gold}}>👥 APORTACIONES</td></tr>
+          {Object.entries(socioMeses).map(([s,arr])=><tr key={s}>
+            <td style={{padding:"6px 10px",fontSize:12,color:G.g700,paddingLeft:20}}>{s}</td>
+            {anio!=="todos"?arr.map((v,i)=><td key={i} style={{...cellSt(0,false),color:v>0?G.gold:G.g300}}>{v>0?fmt$(v):"—"}</td>):<td style={{...cellSt(0,false),color:socioData[s]>0?G.gold:G.g300}}>{socioData[s]>0?fmt$(socioData[s]):"—"}</td>}
+            <td style={{...cellSt(socioData[s],true),color:G.gold}}>{socioData[s]>0?fmt$(socioData[s]):"—"}</td>
+          </tr>)}
+          <tr style={{borderTop:`2px solid ${G.beigeD}`}}>
+            <td style={{padding:"8px 10px",fontWeight:700,fontSize:13}}>Total Aportaciones</td>
+            {anio!=="todos"?socMesTot.map((v,i)=><td key={i} style={{...cellSt(v,true),color:G.gold}}>{v>0?fmt$(v):"—"}</td>):<td style={{...cellSt(Object.values(socioData).reduce((a,b)=>a+b,0),true),color:G.gold}}>{fmt$(Object.values(socioData).reduce((a,b)=>a+b,0))}</td>}
+            <td style={{...cellSt(Object.values(socioData).reduce((a,b)=>a+b,0),true),color:G.gold,background:"rgba(201,168,76,0.1)"}}>{fmt$(Object.values(socioData).reduce((a,b)=>a+b,0))}</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>}
+
+    {/* ── TAB: INDICADORES ── */}
+    {tabR==="indicadores"&&<div>
+      <div className="sg">
+        <div className="sc"><span className="si">🐷</span><span className="sl">Ingresos Cerdos</span><span className="sv">{fmt$(modCerdos.i)}</span><span className="str">Gastos: {fmt$(modCerdos.g)}</span></div>
+        <div className="sc"><span className="si">🌿</span><span className="sl">Ingresos Ñame</span><span className="sv">{fmt$(modName.i)}</span><span className="str">Gastos: {fmt$(modName.g)}</span></div>
+        <div className="sc"><span className="si">⚖️</span><span className="sl">Balance Cerdos</span><span className="sv" style={{color:modCerdos.i-modCerdos.g>=0?G.deep:G.red}}>{fmt$(modCerdos.i-modCerdos.g)}</span></div>
+        <div className="sc"><span className="si">⚖️</span><span className="sl">Balance Ñame</span><span className="sv" style={{color:modName.i-modName.g>=0?G.deep:G.red}}>{fmt$(modName.i-modName.g)}</span></div>
       </div>
-    </div>
-    <div className="g2">
-      <div className="card">
-        <div className="card-h"><h3>🏭 Por Módulo</h3></div>
-        <div className="card-b">
-          {modData.map(m=><div key={m.label} style={{marginBottom:18}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginTop:4}}>
+        <div className="card"><div className="card-h"><h3>📐 Rentabilidad</h3></div><div className="card-b">
+          {[
+            {l:"ROI General",v:`${roi.toFixed(1)}%`,d:"Retorno sobre cada $ invertido",ok:roi>=0},
+            {l:"Margen Neto",v:`${margenNeto.toFixed(1)}%`,d:"Balance / Total gastos",ok:margenNeto>=0},
+            {l:"ROI Cerdos",v:modCerdos.g>0?`${((modCerdos.i/modCerdos.g-1)*100).toFixed(1)}%`:"—",d:"Retorno módulo porcino",ok:modCerdos.i>=modCerdos.g},
+            {l:"ROI Ñame",v:modName.g>0?`${((modName.i/modName.g-1)*100).toFixed(1)}%`:"—",d:"Retorno módulo ñame",ok:modName.i>=modName.g},
+          ].map(({l,v,d,ok})=><div key={l} style={{marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${G.beigeD}`}}>
+            <div className="fb"><span style={{fontSize:13,fontWeight:600,color:G.g700}}>{l}</span><span style={{fontWeight:800,fontSize:18,color:ok?G.deep:G.red}}>{v}</span></div>
+            <span style={{fontSize:11,color:G.g500}}>{d}</span>
+          </div>)}
+        </div></div>
+
+        <div className="card"><div className="card-h"><h3>📅 Promedios Mensuales</h3></div><div className="card-b">
+          {[
+            {l:"Gasto promedio/mes",v:fmt$(promedioMensualGas),d:`Sobre ${mesesActivos} meses activos`},
+            {l:"Ingreso promedio/mes",v:fmt$(promedioMensualIng),d:"Ingresos / meses activos"},
+            {l:"Balance promedio/mes",v:fmt$(promedioMensualIng-promedioMensualGas),d:"Resultado mensual esperado",ok:(promedioMensualIng-promedioMensualGas)>=0},
+            {l:"Meses rentables",v:`${mesesConBalance} / 12`,d:"Meses con balance positivo",ok:mesesConBalance>=6},
+          ].map(({l,v,d,ok})=><div key={l} style={{marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${G.beigeD}`}}>
+            <div className="fb"><span style={{fontSize:13,fontWeight:600,color:G.g700}}>{l}</span><span style={{fontWeight:800,fontSize:16,color:ok===false?G.red:G.deep}}>{v}</span></div>
+            <span style={{fontSize:11,color:G.g500}}>{d}</span>
+          </div>)}
+        </div></div>
+
+        <div className="card"><div className="card-h"><h3>🎯 Punto de Equilibrio</h3></div><div className="card-b">
+          <p style={{fontSize:12,color:G.g500,marginBottom:16}}>¿Cuántos meses de ingresos se necesitan para cubrir todos los gastos?</p>
+          <div style={{textAlign:"center",padding:"20px 0"}}>
+            <div style={{fontSize:48,fontWeight:900,color:G.deep,lineHeight:1}}>{puntoEquilibrio}</div>
+            <div style={{fontSize:13,color:G.g500,marginTop:6}}>meses para cubrir gastos totales</div>
+          </div>
+          <div style={{borderTop:`1px solid ${G.beigeD}`,paddingTop:14,marginTop:4}}>
+            {[
+              {l:"Gastos totales",v:fmt$(totG)},
+              {l:"Ingreso mensual prom.",v:fmt$(promedioMensualIng)},
+              {l:"Gasto mensual prom.",v:fmt$(promedioMensualGas)},
+            ].map(({l,v})=><div key={l} className="fb" style={{marginBottom:8}}><span style={{fontSize:12,color:G.g500}}>{l}</span><span style={{fontWeight:600,fontSize:13}}>{v}</span></div>)}
+          </div>
+        </div></div>
+
+        <div className="card"><div className="card-h"><h3>🏭 Por Módulo</h3></div><div className="card-b">
+          {[{label:"Cerdos 🐷",...modCerdos},{label:"Ñame 🌿",...modName}].map(m=><div key={m.label} style={{marginBottom:18}}>
             <p style={{fontWeight:700,marginBottom:8,fontSize:13.5}}>{m.label}</p>
             <div className="fb" style={{marginBottom:4}}><span style={{fontSize:12,color:G.g500}}>Gastos</span><span style={{fontWeight:700,color:G.red,fontSize:12.5}}>{fmt$(m.g)}</span></div>
-            <div className="prog-bar"><div className="prog-fill" style={{width:`${(m.g/Math.max(modData[0].g,modData[1].g,1))*100}%`,background:G.red}}></div></div>
+            <div className="prog-bar"><div className="prog-fill" style={{width:`${(m.g/Math.max(modCerdos.g,modName.g,1))*100}%`,background:G.red}}></div></div>
             <div className="fb mt3" style={{marginBottom:4}}><span style={{fontSize:12,color:G.g500}}>Ingresos</span><span style={{fontWeight:700,color:G.deep,fontSize:12.5}}>{fmt$(m.i)}</span></div>
-            <div className="prog-bar"><div className="prog-fill" style={{width:`${(m.i/Math.max(modData[0].i||1,modData[1].i||1,1))*100}%`,background:G.mid}}></div></div>
+            <div className="prog-bar"><div className="prog-fill" style={{width:`${(m.i/Math.max(modCerdos.i||1,modName.i||1,1))*100}%`,background:G.mid}}></div></div>
             <p style={{fontSize:11.5,color:m.i-m.g>=0?G.mid:G.red,marginTop:6,fontWeight:600}}>Balance: {fmt$(m.i-m.g)}</p>
             <hr style={{border:"none",borderTop:`1px solid ${G.beigeD}`,marginTop:10}}/>
           </div>)}
-          <div style={{borderTop:`2px solid ${G.beigeD}`,paddingTop:12,marginTop:4,display:"flex",flexDirection:"column",gap:6}}>
-            <div className="fb"><span style={{fontSize:13,fontWeight:700,color:G.g700}}>Total Gastos</span><span style={{fontWeight:700,color:G.red,fontSize:14}}>{fmt$(modData.reduce((s,m)=>s+m.g,0))}</span></div>
-            <div className="fb"><span style={{fontSize:13,fontWeight:700,color:G.g700}}>Total Ingresos</span><span style={{fontWeight:700,color:G.deep,fontSize:14}}>{fmt$(modData.reduce((s,m)=>s+m.i,0))}</span></div>
-            <div className="fb" style={{borderTop:`1px solid ${G.beigeD}`,paddingTop:8,marginTop:2}}><span style={{fontSize:13,fontWeight:700,color:G.g700}}>Balance General</span><span style={{fontWeight:900,fontSize:15,color:modData.reduce((s,m)=>s+m.i-m.g,0)>=0?G.deep:G.red}}>{fmt$(modData.reduce((s,m)=>s+m.i-m.g,0))}</span></div>
+        </div></div>
+      </div>
+    </div>}
+
+    {/* ── TAB: TENDENCIA ── */}
+    {tabR==="tendencia"&&<div className="card">
+      <div className="card-h"><h3>📈 Tendencia Últimos 12 Meses</h3></div>
+      <div className="card-b">
+        <div style={{display:"flex",gap:16,marginBottom:14}}>
+          <span style={{fontSize:11,color:G.g500,display:"flex",alignItems:"center",gap:4}}><span style={{display:"inline-block",width:12,height:12,borderRadius:2,background:G.mid}}></span>Ingresos</span>
+          <span style={{fontSize:11,color:G.g500,display:"flex",alignItems:"center",gap:4}}><span style={{display:"inline-block",width:12,height:12,borderRadius:2,background:G.beigeD}}></span>Gastos</span>
+        </div>
+        <div className="bar-chart" style={{height:180}}>{trend.map((d,i)=><div key={i} className="bar-w">
+          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:155}}>
+            <div className="bar" style={{height:`${(d.ing/maxT)*155}px`,background:G.mid}}></div>
+            <div className="bar" style={{height:`${(d.gas/maxT)*155}px`,background:G.beigeD}}></div>
           </div>
+          <span className="blab" style={{fontSize:9}}>{d.lab}</span>
+        </div>)}</div>
+        <div style={{marginTop:20}}>
+          <table style={{width:"100%",fontSize:12,borderCollapse:"collapse"}}>
+            <thead><tr><th style={{textAlign:"left",padding:"6px 8px",background:G.beige}}>Mes</th><th style={{textAlign:"right",padding:"6px 8px",background:G.beige}}>Ingresos</th><th style={{textAlign:"right",padding:"6px 8px",background:G.beige}}>Gastos</th><th style={{textAlign:"right",padding:"6px 8px",background:G.beige}}>Resultado</th></tr></thead>
+            <tbody>{trend.map((d,i)=>{const net=d.ing-d.gas;return<tr key={i} style={{borderBottom:`1px solid ${G.beigeD}`}}>
+              <td style={{padding:"6px 8px",fontWeight:600}}>{d.lab}</td>
+              <td style={{padding:"6px 8px",textAlign:"right",color:G.deep}}>{d.ing>0?fmt$(d.ing):"—"}</td>
+              <td style={{padding:"6px 8px",textAlign:"right",color:d.gas>0?G.red:G.g300}}>{d.gas>0?fmt$(d.gas):"—"}</td>
+              <td style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:net<0?G.red:net>0?"#0F6E56":G.g300}}>{net!==0?fmt$(net):"—"}</td>
+            </tr>;})}
+            </tbody>
+          </table>
         </div>
       </div>
-      <div className="card">
-        <div className="card-h"><h3>👥 Aportaciones Socios</h3></div>
-        <div className="card-b">
-          {(()=>{
-            const socios={Roberto:socioData.Roberto||0,Richard:socioData.Richard||0};
-            const totS=Object.values(socios).reduce((a,b)=>a+b,1);
-            return <>
-              {Object.entries(socios).map(([s,v])=><div key={s} style={{marginBottom:14}}>
-                <div className="fb" style={{marginBottom:4}}><span style={{fontSize:13,fontWeight:600}}>{s}</span><span style={{fontWeight:700,color:G.deep}}>{fmt$(v)} <span style={{fontSize:11,color:G.g500}}>({((v/totS)*100).toFixed(1)}%)</span></span></div>
-                <div className="prog-bar"><div className="prog-fill" style={{width:`${(v/totS)*100}%`,background:G.light}}></div></div>
-              </div>)}
-              <div style={{borderTop:`1px solid ${G.beigeD}`,paddingTop:10,marginTop:4}}>
-                <div className="fb"><span style={{fontSize:13,fontWeight:600}}>Total Socios</span><span style={{fontWeight:700,color:G.deep}}>{fmt$(Object.values(socios).reduce((a,b)=>a+b,0))}</span></div>
-              </div>
-              <div style={{borderTop:`1px solid ${G.beigeD}`,paddingTop:12,marginTop:12}}>
-                <p style={{fontSize:12,fontWeight:600,color:G.g500,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>💼 Financiado por Negocio</p>
-                {(()=>{
-                  const neg={Puercos:socioData.Puercos||0,"Ñames":socioData["Ñames"]||0};
-                  const totN=Object.values(neg).reduce((a,b)=>a+b,1);
-                  return <>
-                    {Object.entries(neg).map(([s,v])=><div key={s} style={{marginBottom:12}}>
-                      <div className="fb" style={{marginBottom:4}}><span style={{fontSize:13,fontWeight:600}}>{s}</span><span style={{fontWeight:700,color:G.gold}}>{fmt$(v)} <span style={{fontSize:11,color:G.g500}}>({((v/totN)*100).toFixed(1)}%)</span></span></div>
-                      <div className="prog-bar"><div className="prog-fill" style={{width:`${(v/totN)*100}%`,background:G.gold}}></div></div>
-                    </div>)}
-                    <div className="fb" style={{marginTop:8}}><span style={{fontSize:13,fontWeight:600}}>Total Negocio</span><span style={{fontWeight:700,color:G.gold}}>{fmt$(Object.values(neg).reduce((a,b)=>a+b,0))}</span></div>
-                  </>;
-                })()}
-              </div>
-              <div style={{borderTop:`2px solid ${G.beigeD}`,paddingTop:12,marginTop:12}}>
-                <div className="fb"><span style={{fontSize:14,fontWeight:700,color:G.g700}}>Total General</span><span style={{fontWeight:900,fontSize:15,color:G.deep}}>{fmt$(Object.values(socioData).reduce((a,b)=>a+b,0))}</span></div>
-              </div>
-            </>;
-          })()}
-        </div>
-      </div>
-    </div>
-    <div className="card mt4">
-      <div className="card-h"><h3>📋 Desglose por Categoría</h3></div>
-      <div className="tw"><table><thead><tr><th>Categoría</th><th>Módulo</th><th>Total</th><th>% del gasto</th></tr></thead>
+    </div>}
+
+    {/* ── TAB: SOCIOS ── */}
+    {tabR==="socios"&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
+      <div className="card"><div className="card-h"><h3>👥 Aportaciones por Socio</h3></div><div className="card-b">
+        {(()=>{const socios={Roberto:socioData.Roberto||0,Richard:socioData.Richard||0};const totS=Object.values(socios).reduce((a,b)=>a+b,1);return<>
+          {Object.entries(socios).map(([s,v])=><div key={s} style={{marginBottom:16}}>
+            <div className="fb" style={{marginBottom:5}}><span style={{fontSize:14,fontWeight:700}}>{s}</span><span style={{fontWeight:800,color:G.deep,fontSize:16}}>{fmt$(v)}<span style={{fontSize:11,color:G.g500,fontWeight:400,marginLeft:4}}>({((v/totS)*100).toFixed(1)}%)</span></span></div>
+            <div className="prog-bar" style={{height:10}}><div className="prog-fill" style={{width:`${(v/totS)*100}%`,background:G.light}}></div></div>
+          </div>)}
+          <div style={{borderTop:`2px solid ${G.beigeD}`,paddingTop:12,marginTop:4}}>
+            <div className="fb"><span style={{fontWeight:700}}>Total Socios</span><span style={{fontWeight:900,color:G.deep,fontSize:16}}>{fmt$(Object.values(socios).reduce((a,b)=>a+b,0))}</span></div>
+          </div>
+        </>})()}
+      </div></div>
+      <div className="card"><div className="card-h"><h3>💼 Financiado por Negocio</h3></div><div className="card-b">
+        {(()=>{const neg={Puercos:socioData.Puercos||0,"Ñames":socioData["Ñames"]||0};const totN=Object.values(neg).reduce((a,b)=>a+b,1);return<>
+          {Object.entries(neg).map(([s,v])=><div key={s} style={{marginBottom:16}}>
+            <div className="fb" style={{marginBottom:5}}><span style={{fontSize:14,fontWeight:700}}>{s}</span><span style={{fontWeight:800,color:G.gold,fontSize:16}}>{fmt$(v)}<span style={{fontSize:11,color:G.g500,fontWeight:400,marginLeft:4}}>({((v/totN)*100).toFixed(1)}%)</span></span></div>
+            <div className="prog-bar" style={{height:10}}><div className="prog-fill" style={{width:`${(v/totN)*100}%`,background:G.gold}}></div></div>
+          </div>)}
+          <div style={{borderTop:`2px solid ${G.beigeD}`,paddingTop:12,marginTop:4}}>
+            <div className="fb"><span style={{fontWeight:700}}>Total Negocios</span><span style={{fontWeight:900,color:G.gold,fontSize:16}}>{fmt$(Object.values(neg).reduce((a,b)=>a+b,0))}</span></div>
+          </div>
+        </>})()}
+      </div></div>
+      <div className="card"><div className="card-h"><h3>📊 Resumen General</h3></div><div className="card-b">
+        {[
+          {l:"Total aportado (socios)",v:fmt$(socioData.Roberto+socioData.Richard),c:G.deep},
+          {l:"Total aportado (negocios)",v:fmt$(socioData.Puercos+socioData["Ñames"]),c:G.gold},
+          {l:"Total general",v:fmt$(Object.values(socioData).reduce((a,b)=>a+b,0)),c:G.deep},
+          {l:"vs. Gastos totales",v:`${totG>0?((Object.values(socioData).reduce((a,b)=>a+b,0)/totG)*100).toFixed(1):0}%`,c:G.mid},
+        ].map(({l,v,c})=><div key={l} className="fb" style={{marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${G.beigeD}`}}>
+          <span style={{fontSize:13,color:G.g500}}>{l}</span><span style={{fontWeight:800,fontSize:16,color:c}}>{v}</span>
+        </div>)}
+      </div></div>
+    </div>}
+
+    {/* ── TAB: CATEGORÍAS ── */}
+    {tabR==="categorias"&&<div className="card">
+      <div className="card-h"><h3>🗂 Desglose por Categoría</h3></div>
+      <div className="tw"><table><thead><tr><th>Categoría</th><th>Módulo</th><th>Total</th><th>% del gasto</th><th>Barra</th></tr></thead>
       <tbody>{catSorted.map(([cat,val])=>{
         const mod=gF.find(g=>g.categoria===cat)?.modulo||"-";
-        return <tr key={cat}>
+        return<tr key={cat}>
           <td style={{fontSize:12.5}}>{cat}</td>
           <td><span className={`badge ${mod==="Cerdos"?"bg":"bo"}`}>{mod}</span></td>
           <td style={{fontWeight:700,color:G.red}}>{fmt$(val)}</td>
-          <td><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:80,height:6,background:G.beige,borderRadius:3,overflow:"hidden"}}><div style={{width:`${(val/maxCat)*100}%`,height:"100%",background:G.red,borderRadius:3}}></div></div><span style={{fontSize:12}}>{totG>0?((val/totG)*100).toFixed(1):0}%</span></div></td>
+          <td style={{fontWeight:600}}>{totG>0?((val/totG)*100).toFixed(1):0}%</td>
+          <td><div style={{width:120,height:7,background:G.beige,borderRadius:4,overflow:"hidden"}}><div style={{width:`${(val/maxCat)*100}%`,height:"100%",background:G.red,borderRadius:4}}></div></div></td>
         </tr>;
       })}</tbody></table></div>
-    </div>
+    </div>}
   </div>;
 }
 
@@ -1049,9 +1224,8 @@ function CerdosModule({role,toast}){
           return {nombre:c.nombre,nacidos:totalNacidos,partos:cPartos.length};
         }).filter(c=>c.nacidos>0);
         const totalNacidos=partos.reduce((s,p)=>s+p.lechones_vivos,0);
-        const totalVendidos=ventas.filter(v=>v.tipo==="venta"||(!v.tipo||v.tipo==="Lechon")&&v.estatus!=="Abono"&&v.tipo!=="transferencia").reduce((s,v)=>s+v.cantidad,0);
-        const totalTransferidos=ventas.filter(v=>v.tipo==="transferencia").reduce((s,v)=>s+v.cantidad,0);
-        const disponibles=totalNacidos-totalVendidos-totalTransferidos;
+        const totalVendidos=ventas.filter(v=>(!v.tipo||v.tipo==="Lechon")&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0);
+        const disponibles=totalNacidos-totalVendidos;
         return <div className="card mb4">
           <div className="card-h"><h3>🐷 Lechones — Resumen</h3></div>
           <div className="card-b">
@@ -1063,10 +1237,6 @@ function CerdosModule({role,toast}){
               <div style={{textAlign:"center",padding:"12px 20px",background:G.goldL,borderRadius:8}}>
                 <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Vendidos</div>
                 <div style={{fontSize:24,fontWeight:700,color:G.gold}}>{totalVendidos}</div>
-              </div>
-              <div style={{textAlign:"center",padding:"12px 20px",background:G.blueL,borderRadius:8}}>
-                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Transferidos</div>
-                <div style={{fontSize:24,fontWeight:700,color:G.blue}}>{totalTransferidos}</div>
               </div>
               <div style={{textAlign:"center",padding:"12px 20px",background:disponibles>0?"#E1F5EE":G.g100,borderRadius:8}}>
                 <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Disponibles</div>
@@ -1096,7 +1266,7 @@ function CerdosModule({role,toast}){
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Estatus</th><th>Cantidad</th><th>Total</th><th>Comprador</th><th>Pago</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{ventas.map(v=><tr key={v.id}>
             <td>{fmtDisp(v.fecha)}</td>
-            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":v.tipo==="transferencia"?"bo":"bg"}`}>{v.tipo==="transferencia"?"Transferencia":v.tipo||"Lechon"}</span></td>
+            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":"bg"}`}>{v.tipo||"Lechon"}</span></td>
             <td><span className={`badge ${v.estatus==="Abono"?"bo":v.estatus==="Cancelacion"?"bg":"bk"}`}>{v.estatus||"Venta"}</span></td>
             <td style={{fontWeight:700,color:v.estatus==="Abono"?G.g500:G.deep}}>{v.estatus==="Abono"?"-":v.cantidad}</td>
             <td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
