@@ -1049,8 +1049,9 @@ function CerdosModule({role,toast}){
           return {nombre:c.nombre,nacidos:totalNacidos,partos:cPartos.length};
         }).filter(c=>c.nacidos>0);
         const totalNacidos=partos.reduce((s,p)=>s+p.lechones_vivos,0);
-        const totalVendidos=ventas.filter(v=>(!v.tipo||v.tipo==="Lechon")&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0);
-        const disponibles=totalNacidos-totalVendidos;
+        const totalVendidos=ventas.filter(v=>v.tipo==="venta"||(!v.tipo||v.tipo==="Lechon")&&v.estatus!=="Abono"&&v.tipo!=="transferencia").reduce((s,v)=>s+v.cantidad,0);
+        const totalTransferidos=ventas.filter(v=>v.tipo==="transferencia").reduce((s,v)=>s+v.cantidad,0);
+        const disponibles=totalNacidos-totalVendidos-totalTransferidos;
         return <div className="card mb4">
           <div className="card-h"><h3>🐷 Lechones — Resumen</h3></div>
           <div className="card-b">
@@ -1062,6 +1063,10 @@ function CerdosModule({role,toast}){
               <div style={{textAlign:"center",padding:"12px 20px",background:G.goldL,borderRadius:8}}>
                 <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Vendidos</div>
                 <div style={{fontSize:24,fontWeight:700,color:G.gold}}>{totalVendidos}</div>
+              </div>
+              <div style={{textAlign:"center",padding:"12px 20px",background:G.blueL,borderRadius:8}}>
+                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Transferidos</div>
+                <div style={{fontSize:24,fontWeight:700,color:G.blue}}>{totalTransferidos}</div>
               </div>
               <div style={{textAlign:"center",padding:"12px 20px",background:disponibles>0?"#E1F5EE":G.g100,borderRadius:8}}>
                 <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Disponibles</div>
@@ -1091,7 +1096,7 @@ function CerdosModule({role,toast}){
           <thead><tr><th>Fecha</th><th>Tipo</th><th>Estatus</th><th>Cantidad</th><th>Total</th><th>Comprador</th><th>Pago</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{ventas.map(v=><tr key={v.id}>
             <td>{fmtDisp(v.fecha)}</td>
-            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":"bg"}`}>{v.tipo||"Lechon"}</span></td>
+            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":v.tipo==="transferencia"?"bo":"bg"}`}>{v.tipo==="transferencia"?"Transferencia":v.tipo||"Lechon"}</span></td>
             <td><span className={`badge ${v.estatus==="Abono"?"bo":v.estatus==="Cancelacion"?"bg":"bk"}`}>{v.estatus||"Venta"}</span></td>
             <td style={{fontWeight:700,color:v.estatus==="Abono"?G.g500:G.deep}}>{v.estatus==="Abono"?"-":v.cantidad}</td>
             <td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
