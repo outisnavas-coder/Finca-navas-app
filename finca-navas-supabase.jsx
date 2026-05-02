@@ -885,7 +885,7 @@ function CerdosModule({role,toast}){
   const verracos=cerdas.filter(c=>c.tipo==="Verraco");
   const totalLechones=partos.reduce((s,p)=>s+p.lechones_vivos,0);
   const totalVentas=ventas.reduce((s,v)=>s+Number(v.total),0);
-  const vendidosReales=ventas.filter(v=>(!v.tipo||v.tipo==="Lechon")&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0);
+  const vendidosReales=ventas.filter(v=>v.tipo!=="transferencia"&&(v.estatus!=="Abono")).reduce((s,v)=>s+v.cantidad,0);
 
   // Helpers
   const GEST=114,LACT=28,DESC=21;
@@ -1082,7 +1082,7 @@ function CerdosModule({role,toast}){
       <div className="sc grn"><span className="si">🐷</span><span className="sl">Cerdas Activas</span><span className="sv">{madres.length}</span><span className="str">En producción</span></div>
       <div className="sc"><span className="si">🐗</span><span className="sl">Verracos</span><span className="sv">{verracos.length}</span><span className="str">{verracos.map(v=>v.nombre).join(", ")||"-"}</span></div>
       <div className="sc"><span className="si">🐣</span><span className="sl">Total Partos</span><span className="sv">{partos.length}</span><span className="str">{totalLechones} lechones histórico</span></div>
-      <div className="sc"><span className="si">💰</span><span className="sl">Ventas Lechones</span><span className="sv" style={{fontSize:18}}>{fmt$(totalVentas)}</span><span className="str">{ventas.filter(v=>v.tipo!=="transferencia").reduce((s,v)=>s+v.cantidad,0)} vendidos</span></div>
+      <div className="sc"><span className="si">💰</span><span className="sl">Ventas Lechones</span><span className="sv" style={{fontSize:18}}>{fmt$(totalVentas)}</span><span className="str">{ventas.filter(v=>v.tipo!=="transferencia"&&(v.estatus!=="Abono")).reduce((s,v)=>s+v.cantidad,0)} vendidos</span></div>
     </div>
 
     {/* Tabs + Add button */}
@@ -1326,7 +1326,7 @@ function CerdosModule({role,toast}){
         const porCerda=cerdas.filter(c=>c.tipo==="Madre").map(c=>{
           const cPartos=partos.filter(p=>p.cerda_id===c.id);
           const totalNacidos=cPartos.reduce((s,p)=>s+p.lechones_vivos,0);
-          const vendidos=ventas.reduce((s,v)=>s+v.cantidad,0); // global for now
+          const vendidos=ventas.filter(v=>v.tipo!=="transferencia"&&(v.estatus!=="Abono")).reduce((s,v)=>s+v.cantidad,0);
           return {nombre:c.nombre,nacidos:totalNacidos,partos:cPartos.length};
         }).filter(c=>c.nacidos>0);
         const totalNacidos=partos.reduce((s,p)=>s+p.lechones_vivos,0);
