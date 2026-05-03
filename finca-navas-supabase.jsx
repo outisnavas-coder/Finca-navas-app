@@ -868,17 +868,16 @@ function CerdosModule({role,toast}){
 
   const fetchPorcino=async(showLoading=true)=>{
     if(showLoading)setLoading(true);
-    const [c,p,m,v,vt]=await Promise.all([
+    const [c,p,m,v,vt,pr]=await Promise.all([
       supabase.from("cerdas").select("*").order("codigo"),
       supabase.from("partos").select("*,cerdas(nombre,codigo)").order("fecha_parto",{ascending:false}),
       supabase.from("celos_montas").select("*,cerdas!celos_montas_cerda_id_fkey(nombre,codigo)").order("fecha_monta",{ascending:false}),
       supabase.from("vacunas_cerdas").select("*,cerdas(nombre,codigo)").order("fecha",{ascending:false}),
       supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
       supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
-      supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
     ]);
     setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);
-    setVacunas(v.data||[]);setVentas(vt.data||[]);
+    setVacunas(v.data||[]);setVentas(vt.data||[]);setProtocolo(pr.data||[]);
     if(showLoading)setLoading(false);
   };
 
