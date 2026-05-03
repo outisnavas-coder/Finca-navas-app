@@ -857,6 +857,7 @@ function CerdosModule({role,toast}){
   const [montas,setMontas]=useState([]);
   const [vacunas,setVacunas]=useState([]);
   const [ventas,setVentas]=useState([]);
+  const [protocolo,setProtocolo]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({});
@@ -873,6 +874,8 @@ function CerdosModule({role,toast}){
       supabase.from("celos_montas").select("*,cerdas!celos_montas_cerda_id_fkey(nombre,codigo)").order("fecha_monta",{ascending:false}),
       supabase.from("vacunas_cerdas").select("*,cerdas(nombre,codigo)").order("fecha",{ascending:false}),
       supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
+      supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
+      supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
     ]);
     setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);
     setVacunas(v.data||[]);setVentas(vt.data||[]);
@@ -1278,6 +1281,42 @@ function CerdosModule({role,toast}){
             <span>Lechones vivos: <strong style={{color:G.deep}}>{totV}</strong></span>
             <span>Promedio/parto: <strong>{(totV/pts.length).toFixed(1)}</strong></span>
           </div>
+          {pts.map(p=>{
+            const proto=protocolo.filter(x=>x.parto_id===p.id);
+            if(!proto.length)return null;
+            const pendientes=proto.filter(x=>x.estado==="pendiente").length;
+            const vencidos=proto.filter(x=>x.estado==="vencido").length;
+            const completados=proto.filter(x=>x.estado==="completado").length;
+            return <div key={p.id} style={{padding:"14px 20px",borderTop:`1px solid ${G.beigeD}`}}>
+              <div className="fb" style={{marginBottom:12}}>
+                <span style={{fontWeight:700,fontSize:13,color:G.g700}}>🩺 Protocolo Sanitario — Parto {fmtDisp(p.fecha_parto)}</span>
+                <div className="fl gap2">
+                  {completados>0&&<span className="badge bg">{completados} completados</span>}
+                  {pendientes>0&&<span className="badge bo">{pendientes} pendientes</span>}
+                  {vencidos>0&&<span className="badge br">{vencidos} vencidos</span>}
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>
+                {proto.map(pr=>{
+                  const esCompletado=pr.estado==="completado";
+                  const esVencido=pr.estado==="vencido";
+                  const bg=esCompletado?"#E1F5EE":esVencido?"#FEE2E2":"#FFF9EC";
+                  const border=esCompletado?"#0F6E56":esVencido?G.red:G.gold;
+                  const icon=esCompletado?"✅":esVencido?"⚠️":"⏳";
+                  return <div key={pr.id} style={{padding:"10px 12px",background:bg,borderRadius:8,borderLeft:`3px solid ${border}`}}>
+                    <div style={{fontSize:12,fontWeight:700,color:G.g700,marginBottom:4}}>{icon} {pr.procedimiento}</div>
+                    <div style={{fontSize:11,color:G.g500}}>Estimado: {fmtDisp(pr.fecha_estimada)}</div>
+                    {pr.fecha_real&&<div style={{fontSize:11,color:"#0F6E56",fontWeight:600}}>Real: {fmtDisp(pr.fecha_real)}</div>}
+                    {role==="admin"&&!esCompletado&&<button className="btn btn-sm" style={{marginTop:6,fontSize:10,padding:"2px 8px",background:G.deep,color:"#fff",border:"none"}}
+                      onClick={async()=>{
+                        const fechaReal=prompt(`Fecha real de ${pr.procedimiento} (YYYY-MM-DD):`,toISO(TODAY));
+                        if(fechaReal){await supabase.from("protocolo_partos").update({fecha_real:fechaReal,estado:"completado"}).eq("id",pr.id);fetchPorcino(false);}
+                      }}>Marcar ✓</button>}
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })}
         </div>;
       })}
     </div>}
