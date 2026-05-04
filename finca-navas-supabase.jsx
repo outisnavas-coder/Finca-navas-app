@@ -832,34 +832,27 @@ function Reportes({gastos,ingresos}){
             ].map(({l,v,c})=><div key={l} className="fb" style={{marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${G.beigeD}`}}>
               <span style={{fontSize:13,color:G.g500}}>{l}</span><span style={{fontWeight:800,fontSize:16,color:c}}>{v}</span>
             </div>)}
-            {/* Indicador Caja Disponible */}
-            <div style={{marginTop:8,padding:16,borderRadius:10,background:seSostiene?"#E1F5EE":"#FEE2E2",border:`1.5px solid ${seSostiene?"#0F6E56":G.red}`}}>
-              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",color:seSostiene?"#0F6E56":G.red,marginBottom:10}}>
-                💰 Caja Disponible — {seSostiene?"El negocio se sostiene":"Requiere aporte"}
-              </div>
-              <div className="fb" style={{marginBottom:8}}>
-                <span style={{fontSize:13,color:G.g500}}>Ingresos totales</span>
-                <span style={{fontWeight:700,color:G.deep}}>{fmt$(totI)}</span>
-              </div>
-              <div className="fb" style={{marginBottom:8}}>
-                <span style={{fontSize:13,color:G.g500}}>Gastos cubiertos por ingresos</span>
-                <span style={{fontWeight:700,color:G.red}}>{fmt$(Math.min(totI,totalAportaciones))}</span>
-              </div>
-              <div style={{height:1,background:seSostiene?"#0F6E56":G.red,opacity:0.3,marginBottom:8}}></div>
-              <div className="fb">
-                <span style={{fontSize:14,fontWeight:700,color:seSostiene?"#0F6E56":G.red}}>
-                  {seSostiene?"Disponible en caja":"Déficit pendiente"}
-                </span>
-                <span style={{fontSize:20,fontWeight:900,color:seSostiene?"#0F6E56":G.red}}>
-                  {fmt$(Math.abs(cajaDisponible))}
-                </span>
-              </div>
-              <div style={{marginTop:8,fontSize:11,color:seSostiene?"#0F6E56":G.red}}>
-                {seSostiene
-                  ?"✓ Los ingresos superan las aportaciones — no se necesita poner más capital"
-                  :`⚠ Falta ${fmt$(Math.abs(cajaDisponible))} para cubrir todas las aportaciones con ingresos`}
-              </div>
-            </div>
+            {/* Indicador Liquidez */}
+            {(()=>{
+              const gastosNegocios=socioData.Puercos+socioData["Ñames"];
+              const disponible=totI-gastosNegocios;
+              const ok=disponible>=0;
+              return <div style={{marginTop:8,padding:16,borderRadius:10,background:ok?"#E1F5EE":"#FEE2E2",border:`1.5px solid ${ok?"#0F6E56":G.red}`}}>
+                <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",color:ok?"#0F6E56":G.red,marginBottom:12}}>
+                  💰 Liquidez Actual
+                </div>
+                <div className="fb" style={{marginBottom:8}}><span style={{fontSize:13,color:G.g500}}>Ingresos a la fecha</span><span style={{fontWeight:700,color:G.deep}}>{fmt$(totI)}</span></div>
+                <div className="fb" style={{marginBottom:12}}><span style={{fontSize:13,color:G.g500}}>Gastos cubiertos por ingresos</span><span style={{fontWeight:700,color:G.red}}>{fmt$(gastosNegocios)}</span></div>
+                <div style={{height:1,background:"rgba(0,0,0,0.1)",marginBottom:12}}></div>
+                <div className="fb">
+                  <span style={{fontSize:15,fontWeight:800,color:ok?"#0F6E56":G.red}}>Disponible</span>
+                  <span style={{fontSize:24,fontWeight:900,color:ok?"#0F6E56":G.red}}>{fmt$(Math.abs(disponible))}</span>
+                </div>
+                <div style={{marginTop:8,fontSize:11,color:ok?"#0F6E56":G.red}}>
+                  {ok?"✓ El negocio se sostiene con los ingresos actuales":"⚠ Los ingresos no alcanzan a cubrir los gastos"}
+                </div>
+              </div>;
+            })()}
           </>;
         })()}
       </div></div>
