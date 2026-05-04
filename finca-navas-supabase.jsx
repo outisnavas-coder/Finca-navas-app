@@ -989,7 +989,7 @@ function CerdosModule({role,toast}){
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
-    const base=new Date(TODAY.getFullYear(),TODAY.getMonth()-Math.floor(meses/3)+timelineOffset,1);
+    const base=new Date(TODAY.getFullYear(),TODAY.getMonth()-Math.floor(meses/2)+timelineOffset,1);
     const tStart=new Date(base);
     const tEnd=new Date(tStart);tEnd.setMonth(tEnd.getMonth()+meses);
     const total=tEnd-tStart;
