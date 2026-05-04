@@ -819,14 +819,49 @@ function Reportes({gastos,ingresos}){
         </>})()}
       </div></div>
       <div className="card"><div className="card-h"><h3>📊 Resumen General</h3></div><div className="card-b">
-        {[
-          {l:"Total aportado (socios)",v:fmt$(socioData.Roberto+socioData.Richard),c:G.deep},
-          {l:"Total aportado (negocios)",v:fmt$(socioData.Puercos+socioData["Ñames"]),c:G.gold},
-          {l:"Total general",v:fmt$(Object.values(socioData).reduce((a,b)=>a+b,0)),c:G.deep},
-          {l:"vs. Gastos totales",v:`${totG>0?((Object.values(socioData).reduce((a,b)=>a+b,0)/totG)*100).toFixed(1):0}%`,c:G.mid},
-        ].map(({l,v,c})=><div key={l} className="fb" style={{marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${G.beigeD}`}}>
-          <span style={{fontSize:13,color:G.g500}}>{l}</span><span style={{fontWeight:800,fontSize:16,color:c}}>{v}</span>
-        </div>)}
+        {(()=>{
+          const totalAportaciones=Object.values(socioData).reduce((a,b)=>a+b,0);
+          const cajaDisponible=totI-totalAportaciones;
+          const seSostiene=cajaDisponible>=0;
+          return <>
+            {[
+              {l:"Total aportado (socios)",v:fmt$(socioData.Roberto+socioData.Richard),c:G.deep},
+              {l:"Total aportado (negocios)",v:fmt$(socioData.Puercos+socioData["Ñames"]),c:G.gold},
+              {l:"Total aportaciones",v:fmt$(totalAportaciones),c:G.deep},
+              {l:"vs. Gastos totales",v:`${totG>0?((totalAportaciones/totG)*100).toFixed(1):0}%`,c:G.mid},
+            ].map(({l,v,c})=><div key={l} className="fb" style={{marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${G.beigeD}`}}>
+              <span style={{fontSize:13,color:G.g500}}>{l}</span><span style={{fontWeight:800,fontSize:16,color:c}}>{v}</span>
+            </div>)}
+            {/* Indicador Caja Disponible */}
+            <div style={{marginTop:8,padding:16,borderRadius:10,background:seSostiene?"#E1F5EE":"#FEE2E2",border:`1.5px solid ${seSostiene?"#0F6E56":G.red}`}}>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",color:seSostiene?"#0F6E56":G.red,marginBottom:10}}>
+                💰 Caja Disponible — {seSostiene?"El negocio se sostiene":"Requiere aporte"}
+              </div>
+              <div className="fb" style={{marginBottom:8}}>
+                <span style={{fontSize:13,color:G.g500}}>Ingresos totales</span>
+                <span style={{fontWeight:700,color:G.deep}}>{fmt$(totI)}</span>
+              </div>
+              <div className="fb" style={{marginBottom:8}}>
+                <span style={{fontSize:13,color:G.g500}}>Gastos cubiertos por ingresos</span>
+                <span style={{fontWeight:700,color:G.red}}>{fmt$(Math.min(totI,totalAportaciones))}</span>
+              </div>
+              <div style={{height:1,background:seSostiene?"#0F6E56":G.red,opacity:0.3,marginBottom:8}}></div>
+              <div className="fb">
+                <span style={{fontSize:14,fontWeight:700,color:seSostiene?"#0F6E56":G.red}}>
+                  {seSostiene?"Disponible en caja":"Déficit pendiente"}
+                </span>
+                <span style={{fontSize:20,fontWeight:900,color:seSostiene?"#0F6E56":G.red}}>
+                  {fmt$(Math.abs(cajaDisponible))}
+                </span>
+              </div>
+              <div style={{marginTop:8,fontSize:11,color:seSostiene?"#0F6E56":G.red}}>
+                {seSostiene
+                  ?"✓ Los ingresos superan las aportaciones — no se necesita poner más capital"
+                  :`⚠ Falta ${fmt$(Math.abs(cajaDisponible))} para cubrir todas las aportaciones con ingresos`}
+              </div>
+            </div>
+          </>;
+        })()}
       </div></div>
     </div>}
 
