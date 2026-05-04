@@ -1174,17 +1174,18 @@ function CerdosModule({role,toast}){
                 const lactSeg=segs.find(s=>s.title&&s.title.includes("Lactancia"));
                 const lStart=lactSeg?lactSeg.l:0;
                 const lWidth=lactSeg?lactSeg.w:100;
-                return <div style={{position:"relative",height:22,background:"#EDF7F4",borderRadius:4,marginTop:4,border:`1px solid #B8E8D8`}}>
+                return <div style={{position:"relative",height:28,background:"#EDF7F4",borderRadius:4,marginTop:4,border:`1px solid #B8E8D8`}}>
                   <div style={{position:"absolute",left:`${lStart}%`,width:`${lWidth}%`,height:"100%",background:"rgba(95,202,165,0.2)",borderRadius:3}}></div>
                   {protoMarkers.map((m,i)=>{
                     const bg=m.done?"#0F6E56":m.venc?"#991B1B":"#B07D10";
+                    const topPos=i%2===0?"15%":"55%";
                     return <div key={i} title={`${m.proc} — ${m.done?"Real":"Estimado"}: ${m.fecha}`}
-                      style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:"50%",
-                        transform:"translate(-50%,-50%)",
+                      style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:topPos,
+                        transform:"translateX(-50%)",
                         background:bg,color:"#fff",fontSize:8,fontWeight:700,
                         padding:"2px 5px",borderRadius:4,whiteSpace:"nowrap",zIndex:5,
                         boxShadow:"0 1px 4px rgba(0,0,0,0.3)",cursor:"default",
-                        border:"1px solid rgba(255,255,255,0.4)"}}>
+                        border:"1px solid rgba(255,255,255,0.4)",lineHeight:"11px"}}>
                       {m.short}{m.done?" ✓":""}
                     </div>;
                   })}
