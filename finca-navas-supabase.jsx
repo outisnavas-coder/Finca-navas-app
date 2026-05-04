@@ -1458,67 +1458,199 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
 
     {/* ── TIMELINE ── */}
     {tab==="timeline"&&(()=>{
-      const {rows,monthLabels,todayPct,tStart,total}=buildTimelineData();
+      const GEST=114,LACT=28,DESC=21;
+      const MS_DAY=86400000;
+      const toMs=d=>typeof d==="string"?new Date(d+"T12:00:00").getTime():d instanceof Date?d.getTime():new Date(d).getTime();
+      const addDays=(d,n)=>{const dt=new Date(toMs(d));dt.setDate(dt.getDate()+n);return dt;};
+      const dateToPct=(d,tS,tot)=>((toMs(d)-tS)/tot)*100;
+      const fmtLabel=d=>{if(!d)return"";const dt=new Date(toMs(d));return dt.toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"});};
+
+      // ── SECCIÓN 1: ESTADO ACTUAL ──
+      const estadoActual=cerdas.map(c=>{
+        const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>toMs(b.fecha_parto)-toMs(a.fecha_parto));
+        const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>toMs(b.fecha_monta)-toMs(a.fecha_monta));
+        const lastParto=cPartos[0];
+        const lastMonta=cMontas[0];
+        let estado="Sin datos",color=G.g300,bg=G.g100,pct=0,detalle="";
+        let barStart=null,barEnd=null,barColor=G.g300,esProyectado=false;
+
+        if(lastParto){
+          const diasDesdeParto=Math.ceil((TODAY.getTime()-toMs(lastParto.fecha_parto))/MS_DAY);
+          const destete=addDays(lastParto.fecha_parto,LACT);
+          const descFin=addDays(destete,DESC);
+          const proxMonta=new Date(Math.max(descFin.getTime(),TODAY.getTime()));
+          const proxParto=addDays(proxMonta,GEST);
+
+          if(diasDesdeParto>=0&&diasDesdeParto<LACT){
+            estado=`Lactancia D${diasDesdeParto}`;color="#0F6E56";bg="#E1F5EE";
+            pct=(diasDesdeParto/LACT)*100;
+            barStart=lastParto.fecha_parto;barEnd=destete;barColor="#5DCAA5";
+            detalle=`Parió ${fmtLabel(lastParto.fecha_parto)} · ${lastParto.lechones_vivos} lechones · Destete est. ${fmtLabel(destete)}`;
+          } else if(TODAY<descFin){
+            const diasDesc=Math.ceil((TODAY.getTime()-destete.getTime())/MS_DAY);
+            estado=`Descanso D${diasDesc}`;color="#7B6FC4";bg="#EEF0FF";
+            pct=(diasDesc/DESC)*100;
+            barStart=destete;barEnd=descFin;barColor="#AFA9EC";
+            detalle=`Descanso/celo hasta ${fmtLabel(descFin)} · Próx. monta est. ${fmtLabel(proxMonta)}`;
+          } else {
+            // En gestación proyectada
+            const diasGest=Math.ceil((TODAY.getTime()-proxMonta.getTime())/MS_DAY);
+            estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
+            pct=Math.min((diasGest/GEST)*100,100);esProyectado=true;
+            barStart=proxMonta;barEnd=proxParto;barColor="#9FE1CB";
+            detalle=`Gestación estimada · Parto proyectado ${fmtLabel(proxParto)}`;
+          }
+        } else if(lastMonta){
+          const proxParto=addDays(lastMonta.fecha_monta,GEST);
+          const diasGest=Math.ceil((TODAY.getTime()-toMs(lastMonta.fecha_monta))/MS_DAY);
+          if(diasGest>=0&&diasGest<=GEST){
+            estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
+            pct=(diasGest/GEST)*100;
+            barStart=lastMonta.fecha_monta;barEnd=proxParto;barColor="#9FE1CB";
+            detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. ${fmtLabel(proxParto)}`;
+          }
+        }
+        if(c.estado!=="Activa"){estado=c.estado;color=G.g500;bg=G.g100;pct=0;barColor=G.g300;}
+        return {c,estado,color,bg,pct,detalle,barStart,barEnd,barColor,esProyectado,lastParto,lastMonta};
+      });
+
+      // ── SECCIÓN 2: HISTÓRICO (rango configurable) ──
+      const diasRango=Math.round(timelineMeses*30.44);
+      const tStartMs=TODAY.getTime()-(diasRango/2)*MS_DAY+(timelineOffset*diasRango/2)*MS_DAY;
+      const tEndMs=tStartMs+diasRango*MS_DAY;
+      const tS=tStartMs,tTot=tEndMs-tStartMs;
+      const dPct=d=>dateToPct(d,tS,tTot);
+      const todayPct=dPct(TODAY);
+
+      // Generar etiquetas de meses
+      const monthLabels=[];
+      let cur=new Date(new Date(tStartMs).getFullYear(),new Date(tStartMs).getMonth(),1);
+      while(cur.getTime()<tEndMs){
+        const y=cur.getFullYear(),mo=cur.getMonth();
+        const days=new Date(y,mo+1,0).getDate();
+        monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),daysInMonth:days,startPct:dPct(new Date(y,mo,1)),widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/tTot)*100});
+        cur.setMonth(cur.getMonth()+1);
+      }
+
+      // Filas históricas — solo cerdas activas
+      const histRows=cerdas.filter(c=>c.estado==="Activa"&&c.tipo==="Madre").map(c=>{
+        const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>toMs(a.fecha_parto)-toMs(b.fecha_parto));
+        const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>toMs(a.fecha_monta)-toMs(b.fecha_monta));
+        const lastParto=cPartos[cPartos.length-1];
+        const lastMonta=cMontas[cMontas.length-1];
+        const segs=[];const dots=[];
+
+        // Segmentos por cada parto real
+        cPartos.forEach(p=>{
+          const gS=addDays(p.fecha_parto,-GEST);
+          const lE=addDays(p.fecha_parto,LACT);
+          const dE=addDays(lE,DESC);
+          const gs=dPct(gS),ge=dPct(p.fecha_parto),ls=ge,le=dPct(lE),ds=le,de=dPct(dE);
+          if(ge>gs&&ge>0&&gs<100)segs.push({l:Math.max(gs,0),w:Math.min(ge,100)-Math.max(gs,0),color:"#9FE1CB",title:`Gestación → Parto ${fmtLabel(p.fecha_parto)}`});
+          if(le>ls&&le>0&&ls<100)segs.push({l:Math.max(ls,0),w:Math.min(le,100)-Math.max(ls,0),color:"#5DCAA5",title:`Lactancia ${fmtLabel(p.fecha_parto)} → ${fmtLabel(lE)} · ${p.lechones_vivos} lechones`});
+          if(de>ds&&de>0&&ds<100)segs.push({l:Math.max(ds,0),w:Math.min(de,100)-Math.max(ds,0),color:"#AFA9EC",title:`Descanso hasta ${fmtLabel(dE)}`});
+          const xp=dPct(p.fecha_parto);if(xp>=0&&xp<=100)dots.push({x:xp,color:"#378ADD",title:`Parto ${fmtLabel(p.fecha_parto)} · ${p.lechones_vivos} lech.`});
+        });
+        cMontas.forEach(m=>{const x=dPct(m.fecha_monta);if(x>=0&&x<=100)dots.push({x,color:"#639922",title:`Monta ${fmtLabel(m.fecha_monta)}`});});
+
+        // Próximo ciclo proyectado
+        if(lastParto){
+          const destete=addDays(lastParto.fecha_parto,LACT);
+          const descFin=addDays(destete,DESC);
+          const proxMonta=new Date(Math.max(descFin.getTime(),TODAY.getTime()));
+          const proxParto=addDays(proxMonta,GEST);
+          const proxLact=addDays(proxParto,LACT);
+          const ps=dPct(proxMonta),pe=dPct(proxParto),le=dPct(proxLact);
+          if(pe>ps&&pe>0&&ps<100)segs.push({l:Math.max(ps,0),w:Math.min(pe,100)-Math.max(ps,0),color:"#FAC775",proj:true,title:`Gestación proyectada → ${fmtLabel(proxParto)}`});
+          if(le>pe&&le>0&&pe<100)segs.push({l:Math.max(pe,0),w:Math.min(le,100)-Math.max(pe,0),color:"#EF9F27",proj:true,title:`Lactancia proyectada`});
+          const xpm=dPct(proxMonta);if(xpm>=0&&xpm<=100)dots.push({x:xpm,color:"#EF9F27",title:`Monta proyectada ${fmtLabel(proxMonta)}`});
+          const xpp=dPct(proxParto);if(xpp>=0&&xpp<=100)dots.push({x:xpp,color:"#E24B4A",title:`Parto proyectado ${fmtLabel(proxParto)}`});
+        }
+        return {c,segs,dots,lastParto};
+      });
+
       return <div>
-        {/* Timeline controls */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:12,color:G.g500,fontWeight:600}}>Rango:</span>
-            {[["1m",1],["6m",6],["12m",12],["18m",18],["24m",24],["Todo",36]].map(([l,v])=>
-              <button key={v} className={`btn btn-sm ${timelineMeses===v?"btn-p":"btn-o"}`}
-                onClick={()=>{setTimelinesMeses(v);setTimelineOffset(0);}}>{l}</button>
-            )}
-          </div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(o=>o-Math.floor(timelineMeses/2))}>« Anterior</button>
-            <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(0)} style={{fontSize:11}}>Hoy</button>
-            <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(o=>o+Math.floor(timelineMeses/2))}>Siguiente »</button>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14,paddingLeft:90}}>
-          {[["#9FE1CB","Gestación"],["#5DCAA5","Lactancia"],["#AFA9EC","Descanso"],["#FAC775","Proyectado"]].map(([c,l])=>
-            <div key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:G.g500}}>
-              <div style={{width:12,height:12,borderRadius:3,background:c}}></div>{l}
-            </div>)}
-          {[["#378ADD","Parto real"],["#639922","Monta"],["#E24B4A","Parto proy."]].map(([c,l])=>
-            <div key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:G.g500}}>
-              <div style={{width:10,height:10,borderRadius:"50%",background:c}}></div>{l}
-            </div>)}
-        </div>
-        <div style={{position:"relative",height:36,marginBottom:4,paddingLeft:90}}>
-          {monthLabels.map((ml,i)=><div key={i} style={{position:"absolute",left:`calc(90px + ${ml.startPct}%)`,width:`${ml.widthPct}%`,top:0,height:"100%",borderLeft:`0.5px solid ${G.beigeD}`}}>
-            <div style={{fontSize:10,fontWeight:600,color:G.g500,textAlign:"center",paddingTop:2}}>{ml.m}</div>
-            <div style={{position:"relative",height:14}}>
-              {Array.from({length:ml.daysInMonth},(_,i)=>i+1).filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>{
-                const pct=((d-1)/ml.daysInMonth)*100;
-                return <span key={d} style={{position:"absolute",left:`${pct}%`,transform:"translateX(-50%)",fontSize:7,color:G.g300,lineHeight:1}}>{d}</span>;
-              })}
-            </div>
-          </div>)}
-        </div>
-        {rows.map(({c,segs,dots,proxParto,sLabel,sColor,sBg,checks,totalLech,nPartos})=><div key={c.id} className="card mb4" style={{overflow:"hidden"}}>
-          <div style={{display:"flex",alignItems:"stretch"}}>
-            <div style={{width:88,flexShrink:0,padding:"10px",borderRight:`0.5px solid ${G.beigeD}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
-              <span style={{fontWeight:600,fontSize:13}}>{c.nombre}</span>
-              <span style={{fontSize:10,padding:"2px 6px",borderRadius:20,background:sBg,color:sColor,textAlign:"center"}}>{sLabel}</span>
-            </div>
-            <div style={{flex:1,padding:"10px 8px",position:"relative",overflow:"hidden"}}>
-              <div style={{position:"relative",height:24,background:G.beige,borderRadius:4}}>
-                {segs.map((s,i)=><div key={i} title={s.title} style={{position:"absolute",left:`${s.l.toFixed(1)}%`,width:`${Math.max(s.w,0.5).toFixed(1)}%`,height:"100%",background:s.color,borderRadius:3,border:s.proj?"1px dashed rgba(0,0,0,.2)":"none"}}></div>)}
-                {dots.map((d,i)=><div key={i} title={d.title} style={{position:"absolute",left:`${d.x.toFixed(1)}%`,top:"50%",width:9,height:9,borderRadius:"50%",background:d.color,border:`1.5px solid ${G.white}`,transform:"translate(-50%,-50%)",zIndex:8}}></div>)}
-                <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:0,bottom:0,width:2,background:G.red,borderRadius:1,zIndex:10}}>
-                  <span style={{position:"absolute",bottom:-18,left:"50%",transform:"translateX(-50%)",fontSize:9,color:"#fff",fontWeight:800,whiteSpace:"nowrap",background:G.red,padding:"1px 5px",borderRadius:8,boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>hoy</span>
+        {/* ── SECCIÓN 1: ESTADO ACTUAL ── */}
+        <div className="card mb4">
+          <div className="card-h"><h3>📍 Estado Actual — Todas las Cerdas</h3><span style={{fontSize:12,color:G.g500}}>{new Date().toLocaleDateString("es-PA",{day:"2-digit",month:"long",year:"numeric"})}</span></div>
+          <div className="card-b" style={{padding:0}}>
+            {estadoActual.map(({c,estado,color,bg,pct,detalle,barStart,barEnd,barColor,esProyectado})=>(
+              <div key={c.id} title={detalle} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:`1px solid ${G.beigeD}`,opacity:c.estado!=="Activa"?0.5:1}}>
+                <div style={{width:80,flexShrink:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:G.deep}}>{c.nombre}</div>
+                  <div style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:bg,color,display:"inline-block",marginTop:2,fontWeight:600}}>{estado}</div>
+                </div>
+                <div style={{flex:1,position:"relative"}}>
+                  <div style={{height:20,background:G.beige,borderRadius:10,overflow:"hidden",position:"relative"}}>
+                    <div style={{position:"absolute",left:0,width:`${Math.min(pct,100)}%`,height:"100%",background:barColor,borderRadius:10,border:esProyectado?"2px dashed rgba(0,0,0,.15)":"none",transition:"width .3s"}}></div>
+                  </div>
+                  <div style={{fontSize:10,color:G.g500,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{detalle}</div>
+                </div>
+                <div style={{width:60,textAlign:"right",fontSize:11,color:G.g500,flexShrink:0}}>
+                  {Math.round(pct)}%
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
 
-            </div>
-            <div style={{width:90,flexShrink:0,padding:"10px 8px",borderLeft:`0.5px solid ${G.beigeD}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:3,fontSize:11,color:G.g500}}>
-              <div>Partos: <strong style={{color:G.deep}}>{nPartos}</strong></div>
-              <div>Lechones: <strong style={{color:G.deep}}>{totalLech}</strong></div>
-              {proxParto&&<div style={{color:diffD(TODAY,proxParto)<14?G.red:G.gold,fontWeight:600,fontSize:10}}>{fmtS(proxParto)}</div>}
+        {/* ── SECCIÓN 2: HISTÓRICO ── */}
+        <div className="card">
+          <div className="card-h">
+            <h3>📅 Histórico — Cerdas Activas</h3>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {[["1m",1],["6m",6],["12m",12],["18m",18],["24m",24],["Todo",36]].map(([l,v])=>
+                <button key={v} className={`btn btn-sm ${timelineMeses===v?"btn-p":"btn-o"}`}
+                  onClick={()=>{setTimelinesMeses(v);setTimelineOffset(0);}}>{l}</button>)}
+              <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(o=>o-1)}>«</button>
+              <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(0)}>Hoy</button>
+              <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(o=>o+1)}>»</button>
             </div>
           </div>
-        </div>)}
+          <div className="card-b" style={{padding:"12px 16px"}}>
+            {/* Leyenda */}
+            <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:12}}>
+              {[["#9FE1CB","Gestación"],["#5DCAA5","Lactancia"],["#AFA9EC","Descanso"],["#FAC775","Proy. Gestación"],["#EF9F27","Proy. Lactancia"]].map(([c,l])=>
+                <div key={l} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:G.g500}}>
+                  <div style={{width:12,height:10,borderRadius:2,background:c}}></div>{l}
+                </div>)}
+              {[["#378ADD","Parto"],["#639922","Monta"],["#E24B4A","Parto proy."],["#EF9F27","Monta proy."]].map(([c,l])=>
+                <div key={l} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:G.g500}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:c}}></div>{l}
+                </div>)}
+            </div>
+            {/* Eje de fechas */}
+            <div style={{display:"flex",marginBottom:6,paddingLeft:88,position:"relative",height:32}}>
+              {monthLabels.map((ml,i)=>(
+                <div key={i} style={{position:"absolute",left:`calc(88px + ${Math.max(ml.startPct,0)}%)`,width:`${ml.widthPct}%`,top:0,height:"100%",borderLeft:`1px solid ${G.beigeD}`}}>
+                  <div style={{fontSize:10,fontWeight:600,color:G.g500,paddingLeft:3,whiteSpace:"nowrap"}}>{ml.m}</div>
+                  <div style={{position:"relative",height:14}}>
+                    {Array.from({length:ml.daysInMonth},(_,i)=>i+1).filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>(
+                      <span key={d} style={{position:"absolute",left:`${((d-1)/ml.daysInMonth)*100}%`,transform:"translateX(-50%)",fontSize:7,color:G.g300}}>{d}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Filas */}
+            {histRows.map(({c,segs,dots})=>(
+              <div key={c.id} style={{display:"flex",alignItems:"center",marginBottom:8}}>
+                <div style={{width:88,flexShrink:0,fontSize:12,fontWeight:600,color:G.deep}}>{c.nombre}</div>
+                <div style={{flex:1,position:"relative",height:24,background:G.beige,borderRadius:4}}>
+                  {segs.map((s,i)=>(
+                    <div key={i} title={s.title} style={{position:"absolute",left:`${s.l.toFixed(1)}%`,width:`${Math.max(s.w,0.3).toFixed(1)}%`,height:"100%",background:s.color,borderRadius:3,border:s.proj?"1px dashed rgba(0,0,0,.2)":"none",cursor:"help"}}></div>
+                  ))}
+                  {dots.map((d,i)=>(
+                    <div key={i} title={d.title} style={{position:"absolute",left:`${d.x.toFixed(1)}%`,top:"50%",width:8,height:8,borderRadius:"50%",background:d.color,border:`1.5px solid #fff`,transform:"translate(-50%,-50%)",zIndex:8,cursor:"help"}}></div>
+                  ))}
+                  {todayPct>=0&&todayPct<=100&&<div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:0,bottom:0,width:2,background:G.red,zIndex:10,borderRadius:1}}>
+                    <span style={{position:"absolute",bottom:-16,left:"50%",transform:"translateX(-50%)",fontSize:8,color:"#fff",fontWeight:800,background:G.red,padding:"1px 4px",borderRadius:6,whiteSpace:"nowrap"}}>hoy</span>
+                  </div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>;
     })()}
 
