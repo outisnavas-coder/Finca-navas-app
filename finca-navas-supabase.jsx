@@ -1139,59 +1139,29 @@ function CerdosModule({role,toast}){
         <div style={{display:"flex",marginBottom:4,paddingLeft:90}}>
           {monthLabels.map((m,i)=><div key={i} style={{flex:1,fontSize:10,color:G.g500,textAlign:"center",borderLeft:`0.5px solid ${G.beigeD}`,paddingLeft:2}}>{m}</div>)}
         </div>
-        {rows.map(({c,segs,dots,proxParto,sLabel,sColor,sBg,checks,totalLech,nPartos})=>{
-          // Calcular posición X de cada procedimiento del protocolo dentro del timeline
-          const lastParto=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>b.fecha_parto.localeCompare(a.fecha_parto))[0];
-          const protoMarkers=lastParto?protocolo.filter(x=>x.parto_id===lastParto.id).map(pr=>{
-            const fecha=pr.fecha_real||pr.fecha_estimada;
-            if(!fecha)return null;
-            const d=new Date(fecha);
-            const xPct=((d-tStart)/(total*24*60*60*1000))*100;
-            if(xPct<0||xPct>100)return null;
-            const done=pr.estado==="completado";
-            const venc=pr.estado==="vencido";
-            const short=pr.procedimiento.replace("Hierro 1ra dosis","Fe1").replace("Hierro 2da dosis","Fe2").replace("Descolmillado","Desc").replace("Capadura machos","Cap").replace("Desparasitación","Desp").replace("Vitaminación","Vit").replace("Destete","Det");
-            return {xPct,done,venc,short,fecha,proc:pr.procedimiento};
-          }).filter(Boolean):[];
-
-          return <div key={c.id} className="card mb4" style={{overflow:"hidden"}}>
+        {rows.map(({c,segs,dots,proxParto,sLabel,sColor,sBg,checks,totalLech,nPartos})=><div key={c.id} className="card mb4" style={{overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"stretch"}}>
             <div style={{width:88,flexShrink:0,padding:"10px",borderRight:`0.5px solid ${G.beigeD}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
               <span style={{fontWeight:600,fontSize:13}}>{c.nombre}</span>
               <span style={{fontSize:10,padding:"2px 6px",borderRadius:20,background:sBg,color:sColor,textAlign:"center"}}>{sLabel}</span>
             </div>
             <div style={{flex:1,padding:"10px 8px",position:"relative",overflow:"hidden"}}>
-              <div style={{position:"relative",height:28,background:G.beige,borderRadius:4}}>
+              <div style={{position:"relative",height:24,background:G.beige,borderRadius:4}}>
                 {segs.map((s,i)=><div key={i} title={s.title} style={{position:"absolute",left:`${s.l.toFixed(1)}%`,width:`${Math.max(s.w,0.5).toFixed(1)}%`,height:"100%",background:s.color,borderRadius:3,border:s.proj?"1px dashed rgba(0,0,0,.2)":"none"}}></div>)}
-
                 {dots.map((d,i)=><div key={i} title={d.title} style={{position:"absolute",left:`${d.x.toFixed(1)}%`,top:"50%",width:9,height:9,borderRadius:"50%",background:d.color,border:`1.5px solid ${G.white}`,transform:"translate(-50%,-50%)",zIndex:8}}></div>)}
                 <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:-4,bottom:-4,width:2,background:G.red,borderRadius:1,zIndex:10}}>
                   <span style={{position:"absolute",top:-14,fontSize:9,color:G.red,fontWeight:600,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>hoy</span>
                 </div>
               </div>
-              {protoMarkers.length>0&&(()=>{
-                // Find lactancia segment bounds
-                const lactSeg=segs.find(s=>s.title&&s.title.includes("Lactancia"));
-                const lStart=lactSeg?lactSeg.l:0;
-                const lWidth=lactSeg?lactSeg.w:100;
-                return <div style={{position:"relative",height:28,background:"#EDF7F4",borderRadius:4,marginTop:4,border:`1px solid #B8E8D8`}}>
-                  <div style={{position:"absolute",left:`${lStart}%`,width:`${lWidth}%`,height:"100%",background:"rgba(95,202,165,0.2)",borderRadius:3}}></div>
-                  {protoMarkers.map((m,i)=>{
-                    const bg=m.done?"#0F6E56":m.venc?"#991B1B":"#B07D10";
-                    const topPos=i%2===0?"15%":"55%";
-                    return <div key={i} title={`${m.proc} — ${m.done?"Real":"Estimado"}: ${m.fecha}`}
-                      style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:topPos,
-                        transform:"translateX(-50%)",
-                        background:bg,color:"#fff",fontSize:8,fontWeight:700,
-                        padding:"2px 5px",borderRadius:4,whiteSpace:"nowrap",zIndex:5,
-                        boxShadow:"0 1px 4px rgba(0,0,0,0.3)",cursor:"default",
-                        border:"1px solid rgba(255,255,255,0.4)",lineHeight:"11px"}}>
-                      {m.short}{m.done?" ✓":""}
-                    </div>;
-                  })}
-                  <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:0,bottom:0,width:2,background:G.red,zIndex:10,borderRadius:1}}></div>
-                </div>;
-              })()}
+              {checks.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:6}}>
+                {checks.map((ch,i)=><span key={i} style={{
+                  fontSize:10,padding:"2px 7px",borderRadius:20,
+                  background:ch.s==="done"?G.pale:ch.s==="alert"?G.redL:G.goldL,
+                  color:ch.s==="done"?G.g500:ch.s==="alert"?G.red:G.gold,
+                  fontWeight:ch.s==="done"?400:600,
+                  opacity:ch.s==="done"?0.6:1
+                }}>{ch.l}</span>)}
+              </div>}
             </div>
             <div style={{width:90,flexShrink:0,padding:"10px 8px",borderLeft:`0.5px solid ${G.beigeD}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:3,fontSize:11,color:G.g500}}>
               <div>Partos: <strong style={{color:G.deep}}>{nPartos}</strong></div>
@@ -1199,8 +1169,7 @@ function CerdosModule({role,toast}){
               {proxParto&&<div style={{color:diffD(TODAY,proxParto)<14?G.red:G.gold,fontWeight:600,fontSize:10}}>{fmtS(proxParto)}</div>}
             </div>
           </div>
-        </div>;
-        })}
+        </div>)}
       </div>;
     })()}
 
