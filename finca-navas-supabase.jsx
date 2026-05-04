@@ -1163,15 +1163,34 @@ function CerdosModule({role,toast}){
             <div style={{flex:1,padding:"10px 8px",position:"relative",overflow:"hidden"}}>
               <div style={{position:"relative",height:28,background:G.beige,borderRadius:4}}>
                 {segs.map((s,i)=><div key={i} title={s.title} style={{position:"absolute",left:`${s.l.toFixed(1)}%`,width:`${Math.max(s.w,0.5).toFixed(1)}%`,height:"100%",background:s.color,borderRadius:3,border:s.proj?"1px dashed rgba(0,0,0,.2)":"none"}}></div>)}
-                {protoMarkers.map((m,i)=><div key={i} title={`${m.proc}: ${m.fecha}`} style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:0,bottom:0,zIndex:6,display:"flex",flexDirection:"column",alignItems:"center",transform:"translateX(-50%)"}}>
-                  <div style={{width:1.5,height:"100%",background:m.done?"#0F6E56":m.venc?G.red:"#C9A84C",opacity:0.8}}></div>
-                  <span style={{position:"absolute",top:2,fontSize:8,fontWeight:700,color:m.done?"#0F6E56":m.venc?G.red:"#8B6914",whiteSpace:"nowrap",background:"rgba(255,255,255,0.85)",borderRadius:3,padding:"0 2px",lineHeight:"11px"}}>{m.short}{m.done?" ✓":""}</span>
-                </div>)}
+
                 {dots.map((d,i)=><div key={i} title={d.title} style={{position:"absolute",left:`${d.x.toFixed(1)}%`,top:"50%",width:9,height:9,borderRadius:"50%",background:d.color,border:`1.5px solid ${G.white}`,transform:"translate(-50%,-50%)",zIndex:8}}></div>)}
                 <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:-4,bottom:-4,width:2,background:G.red,borderRadius:1,zIndex:10}}>
                   <span style={{position:"absolute",top:-14,fontSize:9,color:G.red,fontWeight:600,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>hoy</span>
                 </div>
               </div>
+              {protoMarkers.length>0&&(()=>{
+                // Find lactancia segment bounds
+                const lactSeg=segs.find(s=>s.title&&s.title.includes("Lactancia"));
+                const lStart=lactSeg?lactSeg.l:0;
+                const lWidth=lactSeg?lactSeg.w:100;
+                return <div style={{position:"relative",height:18,background:"#F0FBF7",borderRadius:3,marginTop:3,overflow:"hidden",border:`1px solid #C8EDE0`}}>
+                  {/* Background lactancia zone */}
+                  <div style={{position:"absolute",left:`${lStart}%`,width:`${lWidth}%`,height:"100%",background:"rgba(95,202,165,0.15)"}}></div>
+                  {protoMarkers.map((m,i)=>{
+                    const bg=m.done?"#0F6E56":m.venc?"#991B1B":"#C9A84C";
+                    const txt=m.done?"#fff":m.venc?"#fff":"#1A1A2E";
+                    return <div key={i} title={`${m.proc}
+${m.done?"✓ Real":"Estimado"}: ${m.fecha}`}
+                      style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:"50%",transform:"translate(-50%,-50%)",
+                        background:bg,color:txt,fontSize:8,fontWeight:700,
+                        padding:"1px 4px",borderRadius:3,whiteSpace:"nowrap",zIndex:5,
+                        boxShadow:"0 1px 3px rgba(0,0,0,0.2)",cursor:"default"}}>
+                      {m.short}{m.done?"✓":""}
+                    </div>;
+                  })}
+                </div>;
+              })()}
             </div>
             <div style={{width:90,flexShrink:0,padding:"10px 8px",borderLeft:`0.5px solid ${G.beigeD}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:3,fontSize:11,color:G.g500}}>
               <div>Partos: <strong style={{color:G.deep}}>{nPartos}</strong></div>
