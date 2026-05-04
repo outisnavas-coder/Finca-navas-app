@@ -1320,13 +1320,12 @@ function CerdosModule({role,toast}){
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
-    // tStart centrado en hoy — para 1m usamos días exactos
-    const totalDias=meses===1?30:meses*30;
-    const halfDias=Math.floor(totalDias/2);
-    const tStart=new Date(TODAY.getTime()-(halfDias-timelineOffset*30)*24*60*60*1000);
-    const tEnd=new Date(tStart.getTime()+totalDias*24*60*60*1000);
-    const total=tEnd-tStart;
-    const todayPct=((TODAY-tStart)/total)*100;
+    const MS_DAY=24*60*60*1000;
+    const diasRango=Math.round(meses*30.44);
+    const tStart=new Date(TODAY.getTime()-(diasRango/2)*MS_DAY+(timelineOffset*diasRango/2)*MS_DAY);
+    const tEnd=new Date(tStart.getTime()+diasRango*MS_DAY);
+    const total=tEnd.getTime()-tStart.getTime();
+    const todayPct=(TODAY.getTime()-tStart.getTime())/total*100;
 
     const monthLabels=[];
     let cur=new Date(tStart.getFullYear(),tStart.getMonth(),1);
