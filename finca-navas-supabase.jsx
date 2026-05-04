@@ -936,6 +936,72 @@ function NameModule({role,toast,gastos,ingresos}){
         <div className="sc"><span className="si">📅</span><span className="sl">Cosecha estimada</span><span className="sv" style={{color:G.deep}}>{fmtD(actsActual.find(a=>a.actividad==="Cosecha")?.fecha_estimada)}</span><span className="str">Día 230 desde siembra</span></div>
       </div>
 
+      {/* Panel de Producción */}
+      {(siembraActual.quintales_semilla||siembraActual.produccion_estimada_qq)&&(()=>{
+        const qqSemilla=siembraActual.quintales_semilla||30;
+        const semillas=siembraActual.semillas_total||(qqSemilla*500);
+        const plantasProducen=Math.round(semillas*0.60);
+        const plantasSemilla=Math.round(semillas*0.20);
+        const plantasMerma=Math.round(semillas*0.20);
+        const qqEst=siembraActual.produccion_estimada_qq||225;
+        const qqReal=siembraActual.produccion_real_qq;
+        const precioLb=siembraActual.precio_libra||0.40;
+        const ingEst=qqEst*100*precioLb;
+        const ingReal=qqReal?qqReal*100*precioLb:null;
+        const pct=qqReal?Math.min((qqReal/qqEst)*100,100):0;
+        return <div className="card mb4">
+          <div className="card-h"><h3>🌾 Panel de Producción</h3><span style={{fontSize:12,color:G.g500}}>{qqSemilla} qq semilla · {semillas.toLocaleString()} semillas</span></div>
+          <div className="card-b">
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:20}}>
+              {/* Desglose semilla */}
+              <div style={{padding:16,background:G.pale,borderRadius:10}}>
+                <p style={{fontSize:12,fontWeight:700,color:G.g500,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Desglose de Semilla</p>
+                {[
+                  {l:"Total semillas",v:semillas.toLocaleString(),c:G.deep},
+                  {l:"Producción (60%)",v:plantasProducen.toLocaleString()+" plantas",c:"#0F6E56"},
+                  {l:"Semilla reservada (20%)",v:plantasSemilla.toLocaleString()+" plantas",c:G.gold},
+                  {l:"Merma estimada (20%)",v:plantasMerma.toLocaleString()+" plantas",c:G.red},
+                ].map(({l,v,c})=><div key={l} className="fb" style={{marginBottom:8}}>
+                  <span style={{fontSize:12,color:G.g500}}>{l}</span>
+                  <span style={{fontWeight:700,fontSize:12,color:c}}>{v}</span>
+                </div>)}
+              </div>
+              {/* Producción en quintales */}
+              <div style={{padding:16,background:"#F0FBF7",borderRadius:10}}>
+                <p style={{fontSize:12,fontWeight:700,color:G.g500,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Producción en Quintales</p>
+                {[
+                  {l:"Peso prom. por planta",v:"2.5 lbs"},
+                  {l:"Producción estimada",v:`${qqEst} qq`,c:"#0F6E56"},
+                  {l:"Ingreso estimado",v:`$${ingEst.toLocaleString()}`,c:G.deep},
+                  {l:"Precio por libra",v:`$${precioLb.toFixed(2)}`},
+                ].map(({l,v,c})=><div key={l} className="fb" style={{marginBottom:8}}>
+                  <span style={{fontSize:12,color:G.g500}}>{l}</span>
+                  <span style={{fontWeight:700,fontSize:12,color:c||G.g700}}>{v}</span>
+                </div>)}
+              </div>
+              {/* Real vs Estimado */}
+              <div style={{padding:16,background:qqReal?"#E1F5EE":G.g100,borderRadius:10}}>
+                <p style={{fontSize:12,fontWeight:700,color:G.g500,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Real vs Estimado</p>
+                <div style={{textAlign:"center",marginBottom:12}}>
+                  <div style={{fontSize:36,fontWeight:900,color:qqReal?"#0F6E56":G.g300}}>{qqReal?`${qqReal} qq`:"—"}</div>
+                  <div style={{fontSize:12,color:G.g500}}>cosechado real</div>
+                </div>
+                {qqReal&&<>
+                  <div className="prog-bar" style={{height:8,marginBottom:6}}><div className="prog-fill" style={{width:`${pct}%`,background:"#0F6E56"}}></div></div>
+                  <div className="fb">
+                    <span style={{fontSize:11,color:G.g500}}>{pct.toFixed(0)}% del estimado</span>
+                    <span style={{fontSize:11,fontWeight:700,color:"#0F6E56"}}>${ingReal?.toLocaleString()}</span>
+                  </div>
+                  {qqReal>qqEst&&<p style={{fontSize:11,color:"#0F6E56",fontWeight:600,marginTop:6}}>🎉 Superó el estimado por {qqReal-qqEst} qq</p>}
+                  {qqReal<qqEst&&<p style={{fontSize:11,color:G.red,fontWeight:600,marginTop:6}}>⚠ {qqEst-qqReal} qq por debajo del estimado</p>}
+                </>}
+                {!qqReal&&<p style={{fontSize:11,color:G.g500,textAlign:"center"}}>Cosecha pendiente</p>}
+              </div>
+            </div>
+          </div>
+        </div>;
+      })()}
+
       {/* ── TAB TIMELINE ── */}
       {tab==="timeline"&&<div className="card">
         <div className="card-h"><h3>📅 Timeline del Ciclo — {siembraActual.nombre}</h3><span style={{fontSize:12,color:G.g500}}>Siembra: {fmtD(siembraActual.fecha_siembra)} → Cosecha: {fmtD(actsActual.find(a=>a.actividad==="Cosecha")?.fecha_estimada)}</span></div>
