@@ -1570,30 +1570,6 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       });
 
       return <div>
-        {/* ── SECCIÓN 1: ESTADO ACTUAL ── */}
-        <div className="card mb4">
-          <div className="card-h"><h3>📍 Estado Actual — Todas las Cerdas</h3><span style={{fontSize:12,color:G.g500}}>{new Date().toLocaleDateString("es-PA",{day:"2-digit",month:"long",year:"numeric"})}</span></div>
-          <div className="card-b" style={{padding:0}}>
-            {estadoActual.map(({c,estado,color,bg,pct,detalle,barStart,barEnd,barColor,esProyectado})=>(
-              <div key={c.id} title={detalle} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:`1px solid ${G.beigeD}`,opacity:c.estado!=="Activa"?0.5:1}}>
-                <div style={{width:80,flexShrink:0}}>
-                  <div style={{fontWeight:700,fontSize:13,color:G.deep}}>{c.nombre}</div>
-                  <div style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:bg,color,display:"inline-block",marginTop:2,fontWeight:600}}>{estado}</div>
-                </div>
-                <div style={{flex:1,position:"relative"}}>
-                  <div style={{height:20,background:G.beige,borderRadius:10,overflow:"hidden",position:"relative"}}>
-                    <div style={{position:"absolute",left:0,width:`${Math.min(pct,100)}%`,height:"100%",background:barColor,borderRadius:10,border:esProyectado?"2px dashed rgba(0,0,0,.15)":"none",transition:"width .3s"}}></div>
-                  </div>
-                  <div style={{fontSize:10,color:G.g500,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{detalle}</div>
-                </div>
-                <div style={{width:60,textAlign:"right",fontSize:11,color:G.g500,flexShrink:0}}>
-                  {Math.round(pct)}%
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* ── SECCIÓN 2: HISTÓRICO ── */}
         <div className="card">
           <div className="card-h">
@@ -1651,6 +1627,30 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             ))}
           </div>
         </div>
+        {/* ── SECCIÓN 1: ESTADO ACTUAL ── */}
+        <div className="card mb4">
+          <div className="card-h"><h3>📍 Estado Actual — Todas las Cerdas</h3><span style={{fontSize:12,color:G.g500}}>{new Date().toLocaleDateString("es-PA",{day:"2-digit",month:"long",year:"numeric"})}</span></div>
+          <div className="card-b" style={{padding:0}}>
+            {estadoActual.map(({c,estado,color,bg,pct,detalle,barStart,barEnd,barColor,esProyectado})=>(
+              <div key={c.id} title={detalle} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:`1px solid ${G.beigeD}`,opacity:c.estado!=="Activa"?0.5:1}}>
+                <div style={{width:80,flexShrink:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:G.deep}}>{c.nombre}</div>
+                  <div style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:bg,color,display:"inline-block",marginTop:2,fontWeight:600}}>{estado}</div>
+                </div>
+                <div style={{flex:1,position:"relative"}}>
+                  <div style={{height:20,background:G.beige,borderRadius:10,overflow:"hidden",position:"relative"}}>
+                    <div style={{position:"absolute",left:0,width:`${Math.min(pct,100)}%`,height:"100%",background:barColor,borderRadius:10,border:esProyectado?"2px dashed rgba(0,0,0,.15)":"none",transition:"width .3s"}}></div>
+                  </div>
+                  <div style={{fontSize:10,color:G.g500,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{detalle}</div>
+                </div>
+                <div style={{width:60,textAlign:"right",fontSize:11,color:G.g500,flexShrink:0}}>
+                  {Math.round(pct)}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>;
     })()}
 
