@@ -1320,16 +1320,22 @@ function CerdosModule({role,toast}){
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
-    const MS_DAY=24*60*60*1000;
+    // Una sola función de conversión para TODO el timeline
+    const MS_DAY=86400000;
     const diasRango=Math.round(meses*30.44);
-    const tStart=new Date(TODAY.getTime()-(diasRango/2)*MS_DAY+(timelineOffset*diasRango/2)*MS_DAY);
-    const tEnd=new Date(tStart.getTime()+diasRango*MS_DAY);
-    const total=tEnd.getTime()-tStart.getTime();
-    const todayPct=(TODAY.getTime()-tStart.getTime())/total*100;
+    const tStartMs=TODAY.getTime()-Math.floor(diasRango/2)*MS_DAY+timelineOffset*diasRango*MS_DAY;
+    const tEndMs=tStartMs+diasRango*MS_DAY;
+    const tStart=new Date(tStartMs);
+    const tEnd=new Date(tEndMs);
+    const total=tEndMs-tStartMs;
+    // Función única: fecha (string o Date) → porcentaje en el timeline
+    const toMs=d=>typeof d==="string"?new Date(d+"T12:00:00").getTime():d instanceof Date?d.getTime():new Date(d).getTime();
+    const dateToPct=d=>((toMs(d)-tStartMs)/total)*100;
+    const todayPct=dateToPct(TODAY);
 
     const monthLabels=[];
     let cur=new Date(tStart.getFullYear(),tStart.getMonth(),1);
-    while(cur<tEnd){const y=cur.getFullYear();const mo=cur.getMonth();const days=new Date(y,mo+1,0).getDate();monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),year:y,month:mo,daysInMonth:days,startPct:((new Date(y,mo,1)-tStart)/total)*100,widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/total)*100});cur.setMonth(cur.getMonth()+1);}
+    while(cur<tEnd){const y=cur.getFullYear();const mo=cur.getMonth();const days=new Date(y,mo+1,0).getDate();monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),year:y,month:mo,daysInMonth:days,startPct:dateToPct(new Date(y,mo,1)),widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/total)*100});cur.setMonth(cur.getMonth()+1);}
 
     const rows=cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=>{
       const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>a.fecha_parto.localeCompare(b.fecha_parto));
@@ -1352,24 +1358,24 @@ function CerdosModule({role,toast}){
       const segs=[];
       cPartos.forEach(p=>{
         const gS=addD(p.fecha_parto,-GEST),lE=addD(p.fecha_parto,LACT),dE=addD(lE,DESC);
-        const gs=pctPos(gS,tStart,total),ge=pctPos(p.fecha_parto,tStart,total);
-        const ls=ge,le=pctPos(lE,tStart,total),ds=le,de=pctPos(dE,tStart,total);
+        const gs=dateToPct(gS),ge=dateToPct(p.fecha_parto);
+        const ls=ge,le=dateToPct(lE),ds=le,de=dateToPct(dE);
         if(ge>gs)segs.push({l:gs,w:ge-gs,color:"#9FE1CB",title:`Gestación → parto ${fmtS(p.fecha_parto)}`});
         if(le>ls)segs.push({l:ls,w:le-ls,color:"#5DCAA5",title:`Lactancia hasta ${fmtS(lE)}`});
         if(de>ds)segs.push({l:ds,w:de-ds,color:"#AFA9EC",title:"Descanso/celo"});
       });
       if(proxMonta&&proxParto){
         const lE=addD(proxParto,LACT);
-        const ps=pctPos(proxMonta,tStart,total),pe=pctPos(proxParto,tStart,total);
-        const ls=pe,le=pctPos(lE,tStart,total);
+        const ps=dateToPct(proxMonta),pe=dateToPct(proxParto);
+        const ls=pe,le=dateToPct(lE);
         if(pe>ps)segs.push({l:ps,w:pe-ps,color:"#FAC775",proj:true,title:`Gestación proy. → ${fmtS(proxParto)}`});
         if(le>ls)segs.push({l:ls,w:le-ls,color:"#EF9F27",proj:true,title:"Lactancia proyectada"});
       }
 
       // Dots
       const dots=[];
-      cPartos.forEach(p=>{const x=pctPos(p.fecha_parto,tStart,total);if(x>=0&&x<=100)dots.push({x,color:"#378ADD",title:`Parto ${fmtS(p.fecha_parto)} — ${p.lechones_vivos} lech.`});});
-      cMontas.forEach(m=>{const x=pctPos(m.fecha_monta,tStart,total);if(x>=0&&x<=100)dots.push({x,color:"#639922",title:`Monta ${fmtS(m.fecha_monta)}`});});
+      cPartos.forEach(p=>{const x=dateToPct(p.fecha_parto);if(x>=0&&x<=100)dots.push({x,color:"#378ADD",title:`Parto ${fmtS(p.fecha_parto)} — ${p.lechones_vivos} lech.`});});
+      cMontas.forEach(m=>{const x=dateToPct(m.fecha_monta);if(x>=0&&x<=100)dots.push({x,color:"#639922",title:`Monta ${fmtS(m.fecha_monta)}`});});
       if(proxMonta){const x=pctPos(proxMonta,tStart,total);if(x>=0&&x<=100)dots.push({x,color:"#EF9F27",title:`Monta proy. ${fmtS(proxMonta)}`});}
       if(proxParto){const x=pctPos(proxParto,tStart,total);if(x>=0&&x<=100)dots.push({x,color:"#E24B4A",title:`Parto proy. ${fmtS(proxParto)}`});}
 
