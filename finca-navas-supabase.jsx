@@ -1518,9 +1518,11 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       const diasRango=Math.round(timelineMeses*30.44);
       const tStartMs=TODAY.getTime()-(diasRango/2)*MS_DAY+(timelineOffset*diasRango/2)*MS_DAY;
       const tEndMs=tStartMs+diasRango*MS_DAY;
-      const tS=tStartMs,tTot=tEndMs-tStartMs;
-      const dPct=d=>dateToPct(d,tS,tTot);
-      const todayPct=dPct(TODAY);
+      const tTot=tEndMs-tStartMs;
+      // Función local independiente - convierte fecha a % del eje
+      const toMsL=d=>typeof d==="string"?new Date(d+"T12:00:00").getTime():d instanceof Date?d.getTime():new Date(d).getTime();
+      const dPct=d=>((toMsL(d)-tStartMs)/tTot)*100;
+      const todayPct=((TODAY.getTime()-tStartMs)/tTot)*100;
 
       // Generar etiquetas de meses
       const monthLabels=[];
