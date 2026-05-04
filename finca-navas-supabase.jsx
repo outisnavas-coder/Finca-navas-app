@@ -1222,7 +1222,7 @@ function CerdosModule({role,toast}){
 
   // Helpers
   const GEST=114,LACT=28,DESC=21;
-  const addD=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
+  const addD=(d,n)=>{const r=typeof d==="string"?new Date(d+"T12:00:00"):new Date(d);r.setDate(r.getDate()+n);return r;};
   const diffD=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
   const fmtS=(d)=>d?new Date(d).toLocaleDateString("es-PA",{day:"numeric",month:"short"}):"-";
   const toISO=(d)=>{if(!d)return"";if(typeof d==="string"&&d.length>=10)return d.substring(0,10);const dt=new Date(d);return dt.toISOString().split("T")[0];};
@@ -1329,7 +1329,8 @@ function CerdosModule({role,toast}){
     const tEnd=new Date(tEndMs);
     const total=tEndMs-tStartMs;
     // Función única: fecha (string o Date) → porcentaje en el timeline
-    const toMs=d=>typeof d==="string"?new Date(d+"T12:00:00").getTime():d instanceof Date?d.getTime():new Date(d).getTime();
+    const toMs=d=>{if(typeof d==="string")return new Date(d+"T12:00:00").getTime();if(d instanceof Date){// If date has no time component (midnight UTC), add 12h to avoid timezone shift
+return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}return new Date(d).getTime();};
     const dateToPct=d=>((toMs(d)-tStartMs)/total)*100;
     const todayPct=dateToPct(TODAY);
 
