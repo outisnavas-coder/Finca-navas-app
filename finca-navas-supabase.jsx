@@ -1115,7 +1115,7 @@ function CerdosModule({role,toast}){
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:12,color:G.g500,fontWeight:600}}>Rango:</span>
-            {[["6m",6],["12m",12],["18m",18],["24m",24],["Todo",36]].map(([l,v])=>
+            {[["1m",1],["6m",6],["12m",12],["18m",18],["24m",24],["Todo",36]].map(([l,v])=>
               <button key={v} className={`btn btn-sm ${timelineMeses===v?"btn-p":"btn-o"}`}
                 onClick={()=>{setTimelinesMeses(v);setTimelineOffset(0);}}>{l}</button>
             )}
@@ -1174,21 +1174,21 @@ function CerdosModule({role,toast}){
                 const lactSeg=segs.find(s=>s.title&&s.title.includes("Lactancia"));
                 const lStart=lactSeg?lactSeg.l:0;
                 const lWidth=lactSeg?lactSeg.w:100;
-                return <div style={{position:"relative",height:18,background:"#F0FBF7",borderRadius:3,marginTop:3,overflow:"hidden",border:`1px solid #C8EDE0`}}>
-                  {/* Background lactancia zone */}
-                  <div style={{position:"absolute",left:`${lStart}%`,width:`${lWidth}%`,height:"100%",background:"rgba(95,202,165,0.15)"}}></div>
+                return <div style={{position:"relative",height:22,background:"#EDF7F4",borderRadius:4,marginTop:4,border:`1px solid #B8E8D8`}}>
+                  <div style={{position:"absolute",left:`${lStart}%`,width:`${lWidth}%`,height:"100%",background:"rgba(95,202,165,0.2)",borderRadius:3}}></div>
                   {protoMarkers.map((m,i)=>{
-                    const bg=m.done?"#0F6E56":m.venc?"#991B1B":"#C9A84C";
-                    const txt=m.done?"#fff":m.venc?"#fff":"#1A1A2E";
-                    return <div key={i} title={`${m.proc}
-${m.done?"✓ Real":"Estimado"}: ${m.fecha}`}
-                      style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:"50%",transform:"translate(-50%,-50%)",
-                        background:bg,color:txt,fontSize:8,fontWeight:700,
-                        padding:"1px 4px",borderRadius:3,whiteSpace:"nowrap",zIndex:5,
-                        boxShadow:"0 1px 3px rgba(0,0,0,0.2)",cursor:"default"}}>
-                      {m.short}{m.done?"✓":""}
+                    const bg=m.done?"#0F6E56":m.venc?"#991B1B":"#B07D10";
+                    return <div key={i} title={`${m.proc} — ${m.done?"Real":"Estimado"}: ${m.fecha}`}
+                      style={{position:"absolute",left:`${m.xPct.toFixed(1)}%`,top:"50%",
+                        transform:"translate(-50%,-50%)",
+                        background:bg,color:"#fff",fontSize:8,fontWeight:700,
+                        padding:"2px 5px",borderRadius:4,whiteSpace:"nowrap",zIndex:5,
+                        boxShadow:"0 1px 4px rgba(0,0,0,0.3)",cursor:"default",
+                        border:"1px solid rgba(255,255,255,0.4)"}}>
+                      {m.short}{m.done?" ✓":""}
                     </div>;
                   })}
+                  <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:0,bottom:0,width:2,background:G.red,zIndex:10,borderRadius:1}}></div>
                 </div>;
               })()}
             </div>
