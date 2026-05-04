@@ -1320,15 +1320,15 @@ function CerdosModule({role,toast}){
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
-    const base=new Date(TODAY.getFullYear(),TODAY.getMonth()-Math.round(meses/2)+timelineOffset,1);
-    const tStart=new Date(base);
-    const tEnd=new Date(tStart);tEnd.setMonth(tEnd.getMonth()+meses);
+    const halfMeses=Math.floor(meses/2);
+    const tStart=new Date(TODAY.getFullYear(),TODAY.getMonth()-halfMeses+timelineOffset,1);
+    const tEnd=new Date(tStart.getFullYear(),tStart.getMonth()+meses,1);
     const total=tEnd-tStart;
-    const todayPct=pctPos(TODAY,tStart,total);
+    const todayPct=((TODAY-tStart)/total)*100;
 
     const monthLabels=[];
     let cur=new Date(tStart);
-    while(cur<tEnd){const daysInMonth=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();const midDay=Math.round(daysInMonth/2);monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),d1:"1",d2:String(midDay),d3:String(daysInMonth)});cur.setMonth(cur.getMonth()+1);}
+    while(cur<tEnd){const y=cur.getFullYear();const mo=cur.getMonth();const days=new Date(y,mo+1,0).getDate();const allDays=Array.from({length:days},(_,i)=>i+1);monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),days:allDays,year:y,month:mo,daysInMonth:days,startPct:((new Date(y,mo,1)-tStart)/total)*100,widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/total)*100});cur.setMonth(cur.getMonth()+1);}
 
     const rows=cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=>{
       const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>a.fecha_parto.localeCompare(b.fecha_parto));
@@ -1467,10 +1467,15 @@ function CerdosModule({role,toast}){
               <div style={{width:10,height:10,borderRadius:"50%",background:c}}></div>{l}
             </div>)}
         </div>
-        <div style={{display:"flex",marginBottom:4,paddingLeft:90}}>
-          {monthLabels.map((m,i)=><div key={i} style={{flex:1,fontSize:10,color:G.g500,borderLeft:`0.5px solid ${G.beigeD}`,paddingLeft:2}}>
-            <div style={{textAlign:"center",fontWeight:600,marginBottom:2}}>{m.m}</div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:G.g300,paddingRight:2}}><span>{m.d1}</span><span>{m.d2}</span><span>{m.d3}</span></div>
+        <div style={{position:"relative",height:36,marginBottom:4,paddingLeft:90}}>
+          {monthLabels.map((ml,i)=><div key={i} style={{position:"absolute",left:`calc(90px + ${ml.startPct}%)`,width:`${ml.widthPct}%`,top:0,height:"100%",borderLeft:`0.5px solid ${G.beigeD}`}}>
+            <div style={{fontSize:10,fontWeight:600,color:G.g500,textAlign:"center",paddingTop:2}}>{ml.m}</div>
+            <div style={{position:"relative",height:14}}>
+              {ml.days.filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>{
+                const pct=((d-1)/ml.daysInMonth)*100;
+                return <span key={d} style={{position:"absolute",left:`${pct}%`,transform:"translateX(-50%)",fontSize:7,color:G.g300,lineHeight:1}}>{d}</span>;
+              })}
+            </div>
           </div>)}
         </div>
         {rows.map(({c,segs,dots,proxParto,sLabel,sColor,sBg,checks,totalLech,nPartos})=><div key={c.id} className="card mb4" style={{overflow:"hidden"}}>
@@ -1483,8 +1488,8 @@ function CerdosModule({role,toast}){
               <div style={{position:"relative",height:24,background:G.beige,borderRadius:4}}>
                 {segs.map((s,i)=><div key={i} title={s.title} style={{position:"absolute",left:`${s.l.toFixed(1)}%`,width:`${Math.max(s.w,0.5).toFixed(1)}%`,height:"100%",background:s.color,borderRadius:3,border:s.proj?"1px dashed rgba(0,0,0,.2)":"none"}}></div>)}
                 {dots.map((d,i)=><div key={i} title={d.title} style={{position:"absolute",left:`${d.x.toFixed(1)}%`,top:"50%",width:9,height:9,borderRadius:"50%",background:d.color,border:`1.5px solid ${G.white}`,transform:"translate(-50%,-50%)",zIndex:8}}></div>)}
-                <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:-4,bottom:-4,width:2,background:G.red,borderRadius:1,zIndex:10}}>
-                  <span style={{position:"absolute",top:-14,fontSize:9,color:G.red,fontWeight:600,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>hoy</span>
+                <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:-6,bottom:-6,width:2,background:G.red,borderRadius:1,zIndex:10}}>
+                  <span style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",fontSize:10,color:"#fff",fontWeight:800,whiteSpace:"nowrap",background:G.red,padding:"1px 6px",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>hoy</span>
                 </div>
               </div>
 
