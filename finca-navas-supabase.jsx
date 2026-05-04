@@ -1376,18 +1376,28 @@ function CerdosModule({role,toast}){
       const dots=[];
       cPartos.forEach(p=>{const x=dateToPct(p.fecha_parto);if(x>=0&&x<=100)dots.push({x,color:"#378ADD",title:`Parto ${fmtS(p.fecha_parto)} — ${p.lechones_vivos} lech.`});});
       cMontas.forEach(m=>{const x=dateToPct(m.fecha_monta);if(x>=0&&x<=100)dots.push({x,color:"#639922",title:`Monta ${fmtS(m.fecha_monta)}`});});
-      if(proxMonta){const x=pctPos(proxMonta,tStart,total);if(x>=0&&x<=100)dots.push({x,color:"#EF9F27",title:`Monta proy. ${fmtS(proxMonta)}`});}
-      if(proxParto){const x=pctPos(proxParto,tStart,total);if(x>=0&&x<=100)dots.push({x,color:"#E24B4A",title:`Parto proy. ${fmtS(proxParto)}`});}
+      if(proxMonta){const x=dateToPct(proxMonta);if(x>=0&&x<=100)dots.push({x,color:"#EF9F27",title:`Monta proy. ${fmtS(proxMonta)}`});}
+      if(proxParto){const x=dateToPct(proxParto);if(x>=0&&x<=100)dots.push({x,color:"#E24B4A",title:`Parto proy. ${fmtS(proxParto)}`});}
 
-      // Status
+      // Status — basado en fecha real del ultimo parto
       let sLabel="Activa",sColor=G.deep,sBg=G.pale;
       if(c.estado!=="Activa"){sLabel=c.estado;sColor=G.g500;sBg=G.g100;}
-      else if(proxParto){
+      else if(lastParto){
+        const diasDesdeParto=Math.ceil((TODAY-new Date(lastParto.fecha_parto+"T12:00:00"))/(1000*60*60*24));
+        const desteteReal=addD(lastParto.fecha_parto,LACT);
+        const descFinReal=addD(desteteReal,DESC);
+        if(diasDesdeParto>=0&&diasDesdeParto<LACT){sLabel=`Lactancia D${diasDesdeParto}`;sColor="#0F6E56";sBg="#E1F5EE";}
+        else if(diasDesdeParto>=LACT&&TODAY<new Date(descFinReal+"T12:00:00")){sLabel="Descanso/Celo";sColor="#7B6FC4";sBg="#EEF0FF";}
+        else if(proxParto){
+          const d=diffD(TODAY,proxParto);
+          if(d>=0&&d<=14){sLabel=`Parto en ${d}d`;sColor=G.red;sBg=G.redL;}
+          else if(d>=0&&d<=60){sLabel=`Gestación`;sColor:"#5DCAA5";sBg=G.pale;}
+          else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.blue;sBg=G.blueL;}
+        }
+      } else if(proxParto){
         const d=diffD(TODAY,proxParto);
-        if(d<0&&-d<LACT){sLabel=`Lactancia D${-d}`;sColor="#0F6E56";sBg="#E1F5EE";}
-        else if(d>=0&&d<=14){sLabel=`Parto en ${d}d`;sColor=G.red;sBg=G.redL;}
-        else if(d>=0&&d<=30){sLabel=`Parto proy. ${fmtS(proxParto)}`;sColor=G.gold;sBg=G.goldL;}
-        else if(d>0){sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.blue;sBg=G.blueL;}
+        if(d>=0&&d<=14){sLabel=`Parto en ${d}d`;sColor=G.red;sBg=G.redL;}
+        else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.blue;sBg=G.blueL;}
       }
 
       // Checklist — usa protocolo_partos real
