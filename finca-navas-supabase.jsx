@@ -849,6 +849,232 @@ function Reportes({gastos,ingresos}){
 }
 
 
+
+// ─── MÓDULO ÑAME ─────────────────────────────────────────────────────────────
+function NameModule({role,toast,gastos,ingresos}){
+  const [siembras,setSiembras]=useState([]);
+  const [actividades,setActividades]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [tab,setTab]=useState("timeline");
+  const [selSiembra,setSelSiembra]=useState(null);
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({});
+  const [saving,setSaving]=useState(false);
+
+  const fetch=async()=>{
+    const[{data:s},{data:a}]=await Promise.all([
+      supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
+      supabase.from("actividades_name").select("*").order("dias_estimado"),
+    ]);
+    setSiembras(s||[]);setActividades(a||[]);
+    if(!selSiembra&&s&&s.length)setSelSiembra(s[0].id);
+    setLoading(false);
+  };
+  useEffect(()=>{fetch();},[]);
+
+  const TODAY=new Date();
+  const fmtD=d=>{if(!d)return"-";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"});};
+  const diffD=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
+
+  const marcarCompletado=async(act)=>{
+    const fechaReal=prompt(`Fecha real de "${act.actividad}" (YYYY-MM-DD):`,new Date().toISOString().split("T")[0]);
+    if(!fechaReal)return;
+    const costoStr=prompt("Costo real ($):",act.costo||0);
+    const mozosStr=prompt("Mozos utilizados:",act.mozos||0);
+    await supabase.from("actividades_name").update({
+      fecha_real:fechaReal,estado:"completado",
+      costo:Number(costoStr)||0,mozos:Number(mozosStr)||0
+    }).eq("id",act.id);
+    toast("Actividad marcada como completada");fetch();
+  };
+
+  if(loading)return<div className="card"><div className="card-b" style={{textAlign:"center",padding:40,color:G.g500}}>Cargando...</div></div>;
+
+  const siembraActual=siembras.find(s=>s.id===selSiembra);
+  const actsActual=actividades.filter(a=>a.siembra_id===selSiembra);
+  const pendientes=actsActual.filter(a=>a.estado==="pendiente");
+  const vencidas=actsActual.filter(a=>a.estado==="pendiente"&&new Date(a.fecha_estimada)<TODAY);
+  const completadas=actsActual.filter(a=>a.estado==="completado");
+  const proxima=pendientes.filter(a=>new Date(a.fecha_estimada)>=TODAY).sort((a,b)=>a.fecha_estimada.localeCompare(b.fecha_estimada))[0];
+
+  // Financiero del módulo ñame
+  const gastosName=gastos.filter(g=>g.modulo==="Ñame");
+  const ingresosName=ingresos.filter(i=>i.modulo==="Ñame");
+  const totGastos=gastosName.reduce((s,g)=>s+Number(g.monto),0);
+  const totIngresos=ingresosName.reduce((s,i)=>s+Number(i.monto),0);
+  const costoActividades=actsActual.reduce((s,a)=>s+Number(a.costo||0),0);
+  const roiName=totGastos>0?((totIngresos/totGastos-1)*100).toFixed(1):0;
+
+  // Timeline de actividades
+  const diasTotal=siembraActual?diffD(siembraActual.fecha_siembra,new Date(siembraActual.fecha_siembra+"T00:00:00").setDate(new Date(siembraActual.fecha_siembra+"T00:00:00").getDate()+240)):240;
+  const pctPos=dias=>(dias/240)*100;
+
+  const catColor={quimico:"#4F46E5",abono:"#0F6E56",labor:"#C9A84C",cosecha:"#E24B4A"};
+  const catBg={quimico:"#EEF2FF",abono:"#E1F5EE",labor:"#FDF6E3",cosecha:"#FEE2E2"};
+
+  return <div>
+    {/* Selector siembra */}
+    <div className="fl gap2 mb4" style={{flexWrap:"wrap",justifyContent:"space-between"}}>
+      <div className="fl gap2">
+        {siembras.map(s=><button key={s.id} className={`btn ${selSiembra===s.id?"btn-p":"btn-o"} btn-sm`}
+          onClick={()=>setSelSiembra(s.id)}>{s.nombre}</button>)}
+        {role==="admin"&&<button className="btn btn-o btn-sm" onClick={()=>{setForm({nombre:"",fecha_siembra:"",hectareas:1,estado:"activa"});setModal("siembra");}}>+ Siembra</button>}
+      </div>
+      <div className="fl gap2">
+        {[["timeline","📅 Timeline"],["actividades","📋 Actividades"],["financiero","💰 Financiero"]].map(([k,l])=>
+          <button key={k} className={`btn btn-sm ${tab===k?"btn-p":"btn-o"}`} onClick={()=>setTab(k)}>{l}</button>)}
+      </div>
+    </div>
+
+    {siembraActual&&<>
+      {/* KPIs */}
+      <div className="sg" style={{marginBottom:16}}>
+        <div className="sc grn"><span className="si">🌿</span><span className="sl">{siembraActual.nombre}</span><span className="sv">{siembraActual.hectareas} ha</span><span className="str">{fmtD(siembraActual.fecha_siembra)}</span></div>
+        <div className="sc"><span className="si">✅</span><span className="sl">Completadas</span><span className="sv">{completadas.length}</span><span className="str">de {actsActual.length} actividades</span></div>
+        <div className="sc"><span className="si">⏳</span><span className="sl">Pendientes</span><span className="sv" style={{color:vencidas.length>0?G.red:G.gold}}>{pendientes.length}</span><span className="str">{vencidas.length>0?`${vencidas.length} vencidas`:"Al día"}</span></div>
+        <div className="sc"><span className="si">📅</span><span className="sl">Próxima actividad</span><span className="sv" style={{fontSize:13}}>{proxima?proxima.actividad.slice(0,20)+"...":"—"}</span><span className="str">{proxima?fmtD(proxima.fecha_estimada):"Sin pendientes"}</span></div>
+        <div className="sc"><span className="si">📅</span><span className="sl">Cosecha estimada</span><span className="sv" style={{color:G.deep}}>{fmtD(actsActual.find(a=>a.actividad==="Cosecha")?.fecha_estimada)}</span><span className="str">Día 230 desde siembra</span></div>
+      </div>
+
+      {/* ── TAB TIMELINE ── */}
+      {tab==="timeline"&&<div className="card">
+        <div className="card-h"><h3>📅 Timeline del Ciclo — {siembraActual.nombre}</h3><span style={{fontSize:12,color:G.g500}}>Siembra: {fmtD(siembraActual.fecha_siembra)} → Cosecha: {fmtD(actsActual.find(a=>a.actividad==="Cosecha")?.fecha_estimada)}</span></div>
+        <div className="card-b">
+          {/* Barra principal */}
+          <div style={{position:"relative",height:32,background:G.beige,borderRadius:8,marginBottom:8,overflow:"visible"}}>
+            {/* Barra de progreso */}
+            {siembraActual&&(()=>{
+              const diasHoy=Math.max(0,Math.min(240,diffD(siembraActual.fecha_siembra,TODAY)));
+              const pct=(diasHoy/240)*100;
+              return <div style={{position:"absolute",left:0,width:`${pct}%`,height:"100%",background:"linear-gradient(90deg,#9FE1CB,#5DCAA5)",borderRadius:8,opacity:0.5}}></div>;
+            })()}
+            {/* Marcadores de actividades */}
+            {actsActual.map((a,i)=>{
+              const pct=pctPos(a.dias_estimado);
+              const done=a.estado==="completado";
+              const venc=a.estado==="pendiente"&&new Date(a.fecha_estimada)<TODAY;
+              const col=done?"#0F6E56":venc?G.red:catColor[a.categoria]||G.gold;
+              return <div key={a.id} title={`${a.actividad}
+${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
+                style={{position:"absolute",left:`${pct}%`,top:0,bottom:0,width:3,background:col,zIndex:5,cursor:"pointer",borderRadius:2}}
+                onClick={()=>setTab("actividades")}>
+                <div style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",fontSize:8,color:col,fontWeight:700,whiteSpace:"nowrap"}}>
+                  {a.dias_estimado}d
+                </div>
+              </div>;
+            })}
+            {/* Línea de hoy */}
+            {siembraActual&&(()=>{
+              const diasHoy=diffD(siembraActual.fecha_siembra,TODAY);
+              if(diasHoy<0||diasHoy>240)return null;
+              const pct=(diasHoy/240)*100;
+              return <div style={{position:"absolute",left:`${pct}%`,top:-8,bottom:-8,width:2,background:G.red,zIndex:10,borderRadius:1}}>
+                <span style={{position:"absolute",top:-16,fontSize:9,color:G.red,fontWeight:700,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>hoy D{diasHoy}</span>
+              </div>;
+            })()}
+          </div>
+          {/* Etiquetas de días */}
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:G.g500,marginBottom:20,paddingTop:4}}>
+            {[0,15,18,45,60,120,138,150,180,210,230].map(d=><span key={d} style={{textAlign:"center"}}>{d}d</span>)}
+          </div>
+          {/* Leyenda categorias */}
+          <div className="fl gap2" style={{flexWrap:"wrap",marginBottom:16}}>
+            {Object.entries(catColor).map(([k,v])=><span key={k} style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:catBg[k],color:v,fontWeight:600,textTransform:"capitalize"}}>{k}</span>)}
+            <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:G.redL,color:G.red,fontWeight:600}}>Hoy</span>
+          </div>
+          {/* Lista próximas actividades */}
+          <div style={{borderTop:`1px solid ${G.beigeD}`,paddingTop:16}}>
+            <p style={{fontWeight:700,fontSize:13,marginBottom:12,color:G.g700}}>Próximas actividades pendientes</p>
+            {pendientes.filter(a=>new Date(a.fecha_estimada)>=TODAY).slice(0,4).map(a=>{
+              const dias=diffD(TODAY,a.fecha_estimada);
+              return <div key={a.id} className="fb" style={{marginBottom:10,padding:"10px 14px",background:catBg[a.categoria]||G.goldL,borderRadius:8,borderLeft:`3px solid ${catColor[a.categoria]||G.gold}`}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:13,color:G.g700}}>{a.actividad}</div>
+                  <div style={{fontSize:11,color:G.g500,marginTop:2}}>Estimado: {fmtD(a.fecha_estimada)} — Día {a.dias_estimado}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <span style={{fontWeight:700,color:catColor[a.categoria]||G.gold,fontSize:13}}>D{dias}</span>
+                  <div style={{fontSize:10,color:G.g500}}>días</div>
+                </div>
+              </div>;
+            })}
+            {vencidas.length>0&&<div style={{marginTop:12}}>
+              <p style={{fontWeight:700,fontSize:12,color:G.red,marginBottom:8}}>⚠ Actividades vencidas ({vencidas.length})</p>
+              {vencidas.map(a=><div key={a.id} className="fb" style={{marginBottom:8,padding:"8px 14px",background:G.redL,borderRadius:8,borderLeft:`3px solid ${G.red}`}}>
+                <span style={{fontSize:12,color:G.red,fontWeight:600}}>{a.actividad}</span>
+                <span style={{fontSize:11,color:G.red}}>Vencida: {fmtD(a.fecha_estimada)}</span>
+              </div>)}
+            </div>}
+          </div>
+        </div>
+      </div>}
+
+      {/* ── TAB ACTIVIDADES ── */}
+      {tab==="actividades"&&<div className="card">
+        <div className="card-h"><h3>📋 Actividades — {siembraActual.nombre}</h3>
+          <div className="fl gap2">
+            <span className="badge bg">{completadas.length} completadas</span>
+            {vencidas.length>0&&<span className="badge br">{vencidas.length} vencidas</span>}
+            {pendientes.length>0&&<span className="badge bo">{pendientes.length} pendientes</span>}
+          </div>
+        </div>
+        <div className="tw"><table>
+          <thead><tr><th>Día</th><th>Actividad</th><th>Categoría</th><th>F. Estimada</th><th>F. Real</th><th>Costo</th><th>Mozos</th><th>Estado</th>{role==="admin"&&<th></th>}</tr></thead>
+          <tbody>{actsActual.map(a=>{
+            const venc=a.estado==="pendiente"&&new Date(a.fecha_estimada)<TODAY;
+            return <tr key={a.id} style={{background:a.estado==="completado"?"#F8FFFB":venc?"#FFF5F5":"white"}}>
+              <td style={{fontWeight:700,color:catColor[a.categoria]||G.gold,textAlign:"center"}}>{a.dias_estimado}d</td>
+              <td style={{fontSize:12,fontWeight:600}}>{a.actividad}</td>
+              <td><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:catBg[a.categoria]||G.goldL,color:catColor[a.categoria]||G.gold,fontWeight:600,textTransform:"capitalize"}}>{a.categoria}</span></td>
+              <td style={{fontSize:12}}>{fmtD(a.fecha_estimada)}</td>
+              <td style={{fontSize:12,color:"#0F6E56",fontWeight:a.fecha_real?600:400}}>{a.fecha_real?fmtD(a.fecha_real):"—"}</td>
+              <td style={{fontWeight:600,color:a.costo>0?G.red:G.g300}}>{a.costo>0?`$${Number(a.costo).toFixed(2)}`:"—"}</td>
+              <td style={{textAlign:"center"}}>{a.mozos>0?a.mozos:"—"}</td>
+              <td>{a.estado==="completado"?<span className="badge bg">✓ Listo</span>:venc?<span className="badge br">⚠ Vencida</span>:<span className="badge bo">Pendiente</span>}</td>
+              {role==="admin"&&<td>{a.estado!=="completado"&&<button className="btn btn-sm btn-p" onClick={()=>marcarCompletado(a)}>✓ Marcar</button>}</td>}
+            </tr>;
+          })}</tbody>
+        </table></div>
+      </div>}
+
+      {/* ── TAB FINANCIERO ── */}
+      {tab==="financiero"&&<div>
+        <div className="sg" style={{marginBottom:16}}>
+          <div className="sc"><span className="si">📤</span><span className="sl">Gastos Módulo</span><span className="sv" style={{color:G.red}}>{`$${totGastos.toFixed(2)}`}</span><span className="str">Finanzas Ñame</span></div>
+          <div className="sc"><span className="si">💰</span><span className="sl">Ingresos Módulo</span><span className="sv" style={{color:G.deep}}>{`$${totIngresos.toFixed(2)}`}</span><span className="str">Ventas Ñame</span></div>
+          <div className="sc"><span className="si">📊</span><span className="sl">Balance</span><span className="sv" style={{color:totIngresos-totGastos>=0?G.deep:G.red}}>{`$${(totIngresos-totGastos).toFixed(2)}`}</span></div>
+          <div className="sc"><span className="si">💹</span><span className="sl">ROI</span><span className="sv" style={{color:Number(roiName)>=0?G.deep:G.red}}>{roiName}%</span></div>
+          <div className="sc"><span className="si">🔧</span><span className="sl">Costo Actividades</span><span className="sv" style={{color:G.red}}>{`$${costoActividades.toFixed(2)}`}</span><span className="str">Registrado en actividades</span></div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          <div className="card"><div className="card-h"><h3>📤 Gastos por Categoría</h3></div>
+            <div className="card-b">
+              {(()=>{
+                const cats={};gastosName.forEach(g=>{cats[g.categoria]=(cats[g.categoria]||0)+Number(g.monto);});
+                const max=Math.max(...Object.values(cats),1);
+                return Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([c,v])=><div key={c} style={{marginBottom:12}}>
+                  <div className="fb" style={{marginBottom:4}}><span style={{fontSize:12,color:G.g700}}>{c}</span><span style={{fontWeight:700,color:G.red,fontSize:12}}>${v.toFixed(2)}</span></div>
+                  <div className="prog-bar"><div className="prog-fill" style={{width:`${(v/max)*100}%`,background:G.red}}></div></div>
+                </div>);
+              })()}
+            </div>
+          </div>
+          <div className="card"><div className="card-h"><h3>💰 Ingresos por Mes</h3></div>
+            <div className="card-b">
+              {ingresosName.length===0?<p style={{color:G.g500,fontSize:13}}>Sin ingresos registrados</p>:
+                ingresosName.map(i=><div key={i.id} className="fb" style={{marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${G.beigeD}`}}>
+                  <div><div style={{fontSize:13,fontWeight:600}}>{i.descripcion||i.categoria}</div><div style={{fontSize:11,color:G.g500}}>{fmtD(i.fecha)}</div></div>
+                  <span style={{fontWeight:700,color:G.deep}}>${Number(i.monto).toFixed(2)}</span>
+                </div>)
+              }
+            </div>
+          </div>
+        </div>
+      </div>}
+    </>}
+  </div>;
+}
+
 // ─── MÓDULO PRODUCCIÓN PORCINA ────────────────────────────────────────────────
 function CerdosModule({role,toast}){
   const [tab,setTab]=useState("timeline");
@@ -1683,12 +1909,7 @@ export default function App(){
             {page==="inventario"&&<Inventario inventario={inventario} onRefresh={fetchAll} role={role} toast={showToast}/>}
             {page==="reportes"&&<Reportes gastos={gastos} ingresos={ingresos}/>}
             {page==="cerdos_m"&&<CerdosModule role={role} toast={showToast}/>}
-            {page==="name_m"&&<div className="card"><div className="card-b" style={{textAlign:"center",padding:40}}>
-              <p style={{fontSize:40,marginBottom:12}}>🌿</p>
-              <p style={{fontSize:15,fontWeight:600,color:G.deep,marginBottom:8}}>Módulo Ñame</p>
-              <p className="muted" style={{marginBottom:16}}>Los datos de ñame están integrados en Finanzas. Módulo detallado próximamente.</p>
-              <button className="btn btn-p" onClick={()=>setPage("finanzas")}>→ Ver en Finanzas</button>
-            </div></div>}
+            {page==="name_m"&&<NameModule role={role} toast={showToast} gastos={gastos} ingresos={ingresos}/>}
           </>}
         </main>
 
