@@ -110,7 +110,7 @@ const CSS = `
   @media(max-width:768px){
     .sidebar{transform:translateX(-256px)}.sidebar.open{transform:translateX(0)}
     .main{margin-left:0!important}.content{padding:10px}
-    .sg{grid-template-columns:repeat(2,1fr)}.fg{grid-template-columns:1fr}.g2{grid-template-columns:1fr}
+    .sg{grid-template-columns:repeat(2,1fr)!important}.fg{grid-template-columns:1fr}.g2{grid-template-columns:1fr}
     .login-card{padding:28px 20px}.topbar{padding:11px 14px}
     .card-h{flex-wrap:wrap;gap:8px}
     .card-h h3{font-size:14px}
@@ -2174,7 +2174,7 @@ export default function App(){
     {toast&&<Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
     <div className="app">
       {mobile&&sideOpen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:99}} onClick={()=>setSideOpen(false)}/>}
-      <nav className={`sidebar ${!sideOpen?"closed":""}`}>
+      <nav className={`sidebar ${mobile?(sideOpen?"open":""):(sideOpen?"":"closed")}`} style={{zIndex:mobile?150:""}}>
         <div className="slogo"><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><img src="/Logo.png" style={{width:28,height:28,objectFit:"contain"}}/><span style={{fontFamily:"'Playfair Display',serif",color:"#fff",fontSize:17,fontWeight:700}}>Gosh Investment</span></div><span style={{color:"#C9A84C",fontSize:11,letterSpacing:"1.5px",textTransform:"uppercase"}}>Sistema GOSH · Panamá</span></div>
         <div style={{overflowY:"auto",flex:1}}>
           {groups.map(g=><div key={g} className="nav-sec">
