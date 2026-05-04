@@ -1518,13 +1518,19 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
 
       // ── SECCIÓN 2: HISTÓRICO (rango configurable) ──
       const diasRango=Math.round(timelineMeses*30.44);
-      const tStartMs=TODAY.getTime()-(diasRango/2)*MS_DAY+(timelineOffset*diasRango/2)*MS_DAY;
+      // Usar mediodía como referencia consistente para todo el timeline
+      const todayNoon=new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate(),12,0,0);
+      const tStartMs=todayNoon.getTime()-(diasRango/2)*MS_DAY+(timelineOffset*diasRango/2)*MS_DAY;
       const tEndMs=tStartMs+diasRango*MS_DAY;
       const tTot=tEndMs-tStartMs;
-      // Función local independiente - convierte fecha a % del eje
-      const toMsL=d=>typeof d==="string"?new Date(d+"T12:00:00").getTime():d instanceof Date?d.getTime():new Date(d).getTime();
+      // Convierte cualquier fecha a ms usando mediodía para strings
+      const toMsL=d=>{
+        if(typeof d==="string")return new Date(d+"T12:00:00").getTime();
+        if(d instanceof Date)return new Date(d.getFullYear(),d.getMonth(),d.getDate(),12,0,0).getTime();
+        return new Date(d).getTime();
+      };
       const dPct=d=>((toMsL(d)-tStartMs)/tTot)*100;
-      const todayPct=((TODAY.getTime()-tStartMs)/tTot)*100;
+      const todayPct=((todayNoon.getTime()-tStartMs)/tTot)*100; // siempre 50% con offset=0
 
       // Generar etiquetas de meses
       const monthLabels=[];
