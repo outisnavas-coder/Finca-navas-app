@@ -1320,15 +1320,17 @@ function CerdosModule({role,toast}){
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
-    const halfMeses=Math.floor(meses/2);
-    const tStart=new Date(TODAY.getFullYear(),TODAY.getMonth()-halfMeses+timelineOffset,1);
-    const tEnd=new Date(tStart.getFullYear(),tStart.getMonth()+meses,1);
+    // Center today exactly at 50% by calculating ms offset
+    const totalMs=meses*30.44*24*60*60*1000;
+    const offsetMs=timelineOffset*30.44*24*60*60*1000;
+    const tStart=new Date(TODAY.getTime()-totalMs/2+offsetMs);
+    const tEnd=new Date(TODAY.getTime()+totalMs/2+offsetMs);
     const total=tEnd-tStart;
-    const todayPct=Math.max(-5,Math.min(105,((TODAY-tStart)/total)*100));
+    const todayPct=((TODAY-tStart)/total)*100;
 
     const monthLabels=[];
-    let cur=new Date(tStart);
-    while(cur<tEnd){const y=cur.getFullYear();const mo=cur.getMonth();const days=new Date(y,mo+1,0).getDate();const allDays=Array.from({length:days},(_,i)=>i+1);monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),days:allDays,year:y,month:mo,daysInMonth:days,startPct:((new Date(y,mo,1)-tStart)/total)*100,widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/total)*100});cur.setMonth(cur.getMonth()+1);}
+    let cur=new Date(tStart.getFullYear(),tStart.getMonth(),1);
+    while(cur<tEnd){const y=cur.getFullYear();const mo=cur.getMonth();const days=new Date(y,mo+1,0).getDate();monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),year:y,month:mo,daysInMonth:days,startPct:((new Date(y,mo,1)-tStart)/total)*100,widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/total)*100});cur.setMonth(cur.getMonth()+1);}
 
     const rows=cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=>{
       const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>a.fecha_parto.localeCompare(b.fecha_parto));
