@@ -223,7 +223,18 @@ function Dashboard({gastos,ingresos,onAnioChange}){
       <div className="sc"><span className="si">📈</span><span className="sl">Balance Neto</span><span className="sv" style={{color:net>=0?G.deep:G.red}}>{fmt$(net)}</span><span className={`str${net<0?" neg":""}`}>{net>=0?"✓ Positivo":"▼ Déficit"}</span></div>
       <div className="sc"><span className="si">🏦</span><span className="sl">Total Invertido</span><span className="sv" style={{fontSize:18}}>{fmt$(totGAll)}</span><span className="str">Acumulado 2024+</span></div>
       <div className="sc"><span className="si">💹</span><span className="sl">Total Recuperado</span><span className="sv" style={{fontSize:18}}>{fmt$(totIAll)}</span><span className="str">Acumulado</span></div>
-      <div className="sc"><span className="si">📊</span><span className="sl">ROI Acumulado</span><span className="sv" style={{fontSize:18}}>{totGAll>0?((totIAll/totGAll)*100).toFixed(1):0}%</span><span className="str muted">Ingresos/Inversión</span></div>
+      {(()=>{
+        const gastosNegocios=gastos.filter(g=>g.pagado_por==="Puercos"||g.pagado_por==="Ñames").reduce((s,g)=>s+Number(g.monto),0);
+        const totIAll2=ingresos.reduce((s,i)=>s+Number(i.monto),0);
+        const disponible=totIAll2-gastosNegocios;
+        const ok=disponible>=0;
+        return <div className="sc" style={{background:ok?"#E1F5EE":"#FEE2E2",border:`1.5px solid ${ok?"#0F6E56":"#991B1B"}`}}>
+          <span className="si">💰</span>
+          <span className="sl" style={{color:ok?"#0F6E56":"#991B1B"}}>Liquidez Actual</span>
+          <span className="sv" style={{color:ok?"#0F6E56":"#991B1B",fontSize:18}}>{fmt$(Math.abs(disponible))}</span>
+          <span className="str" style={{color:ok?"#0F6E56":"#991B1B"}}>{ok?"✓ Disponible en caja":"⚠ Sin liquidez"}</span>
+        </div>;
+      })()}
     </div>
     <div className="g2">
       <div className="card">
