@@ -1052,17 +1052,24 @@ function CerdosModule({role,toast}){
         else if(d>0){sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.blue;sBg=G.blueL;}
       }
 
-      // Checklist
+      // Checklist — usa protocolo_partos real
       const checks=[];
       if(lastParto&&c.estado==="Activa"){
         const dp=diffD(lastParto.fecha_parto,TODAY);
-        if(dp>=0&&dp<35){
-          if(dp<3)checks.push({l:`Hierro lechones (D${3-dp})`,s:"pending"});
-          else checks.push({l:"Hierro lechones ✓",s:"done"});
-          if(dp<7)checks.push({l:`Descolmillar (D${7-dp})`,s:"pending"});
-          else checks.push({l:"Descolmillar ✓",s:"done"});
-          if(dp<21)checks.push({l:`Capar machos (D${21-dp})`,s:"pending"});
-          else checks.push({l:"Capar machos ✓",s:"done"});
+        if(dp>=0&&dp<45){
+          const protoP=protocolo.filter(x=>x.parto_id===lastParto.id);
+          const PROCS=["Descolmillado","Hierro 1ra dosis","Hierro 2da dosis","Capadura machos","Desparasitación","Vitaminación","Destete"];
+          PROCS.forEach(proc=>{
+            const pr=protoP.find(x=>x.procedimiento===proc);
+            if(!pr)return;
+            if(pr.estado==="completado"){
+              checks.push({l:`${proc} ✓`,s:"done"});
+            } else {
+              const diasFalta=diffD(TODAY,pr.fecha_estimada);
+              if(diasFalta<0)checks.push({l:`${proc} ⚠ vencido`,s:"alert"});
+              else checks.push({l:`${proc} (D${diasFalta})`,s:"pending"});
+            }
+          });
         }
       }
       const vCerda=vacunas.filter(v=>v.cerda_id===c.id&&v.proxima_dosis);
