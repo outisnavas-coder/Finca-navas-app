@@ -107,7 +107,32 @@ const CSS = `
   .fil-row select{padding:7px 11px;border:1.5px solid ${G.g300};border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;color:${G.g900};background:#fff;outline:none}
   .fil-row select:focus{border-color:${G.mid}}
   footer{padding:14px 24px;border-top:1px solid ${G.beigeD};background:#fff;display:flex;justify-content:space-between;align-items:center}
-  @media(max-width:768px){.sidebar{transform:translateX(-256px)}.sidebar.open{transform:translateX(0)}.main{margin-left:0!important}.content{padding:14px}.sg{grid-template-columns:repeat(2,1fr)}.fg{grid-template-columns:1fr}.g2{grid-template-columns:1fr}.login-card{padding:28px 20px}.topbar{padding:11px 14px}}
+  @media(max-width:768px){
+    .sidebar{transform:translateX(-256px)}.sidebar.open{transform:translateX(0)}
+    .main{margin-left:0!important}.content{padding:10px}
+    .sg{grid-template-columns:repeat(2,1fr)}.fg{grid-template-columns:1fr}.g2{grid-template-columns:1fr}
+    .login-card{padding:28px 20px}.topbar{padding:11px 14px}
+    .card-h{flex-wrap:wrap;gap:8px}
+    .card-h h3{font-size:14px}
+    .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+    .tab{white-space:nowrap;font-size:12px;padding:7px 12px}
+    .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .tw table{min-width:600px}
+    .btn{font-size:12px;padding:7px 12px}
+    .btn-sm{font-size:11px;padding:4px 8px}
+    .md{padding:18px;max-height:95vh;border-radius:14px 14px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%}
+    .fl{flex-wrap:wrap}
+    .sc{padding:14px}
+    .si{font-size:22px}
+    .sv{font-size:20px}
+  }
+  @media(max-width:480px){
+    .sg{grid-template-columns:1fr}
+    .topbar h1{font-size:16px}
+    .content{padding:8px}
+    .card-b{padding:14px}
+    .card-h{padding:12px 14px}
+  }
 `;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -2167,14 +2192,18 @@ export default function App(){
 
       <div className={`main ${!sideOpen&&!mobile?"full":""}`}>
         <header className="topbar">
-          <div className="fl gap3"><button style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:G.g700}} onClick={()=>setSideOpen(s=>!s)}>☰</button><h2>{titles[page]}</h2></div>
           <div className="fl gap3">
-            <div style={{fontSize:12,color:G.g500}}>{dashAnio==="todo"?"Total":"Balance "+dashAnio}: <span style={{fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</span></div>
-            <button className="btn btn-o btn-sm" onClick={fetchAll} disabled={loading}>{loading?"↺":"↺ Sync"}</button>
+            <button style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:G.g700,padding:"4px 8px"}} onClick={()=>setSideOpen(s=>!s)}>☰</button>
+            <h2 style={{fontSize:mobile?"15px":"20px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:mobile?"150px":"none"}}>{titles[page]}</h2>
+          </div>
+          <div className="fl gap2" style={{alignItems:"center"}}>
+            {!mobile&&<div style={{fontSize:12,color:G.g500}}>{dashAnio==="todo"?"Total":"Balance "+dashAnio}: <span style={{fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</span></div>}
+            {mobile&&<div style={{fontSize:12,fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</div>}
+            <button className="btn btn-o btn-sm" onClick={fetchAll} disabled={loading}>{loading?"↺":"↺"}{!mobile&&" Sync"}</button>
           </div>
         </header>
 
-        <main className="content">
+        <main className="content" style={{paddingBottom:mobile?"72px":""}}>
           {!isConfigured&&<ConfigBanner/>}
           {loading&&<Loading/>}
           {!loading&&<>
