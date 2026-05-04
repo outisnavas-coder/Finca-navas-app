@@ -1324,7 +1324,7 @@ function CerdosModule({role,toast}){
     const tStart=new Date(TODAY.getFullYear(),TODAY.getMonth()-halfMeses+timelineOffset,1);
     const tEnd=new Date(tStart.getFullYear(),tStart.getMonth()+meses,1);
     const total=tEnd-tStart;
-    const todayPct=((TODAY-tStart)/total)*100;
+    const todayPct=Math.max(-5,Math.min(105,((TODAY-tStart)/total)*100));
 
     const monthLabels=[];
     let cur=new Date(tStart);
@@ -1457,7 +1457,7 @@ function CerdosModule({role,toast}){
             <button className="btn btn-sm btn-o" onClick={()=>setTimelineOffset(o=>o+Math.floor(timelineMeses/2))}>Siguiente »</button>
           </div>
         </div>
-        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14}}>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14,paddingLeft:90}}>
           {[["#9FE1CB","Gestación"],["#5DCAA5","Lactancia"],["#AFA9EC","Descanso"],["#FAC775","Proyectado"]].map(([c,l])=>
             <div key={l} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:G.g500}}>
               <div style={{width:12,height:12,borderRadius:3,background:c}}></div>{l}
@@ -1488,8 +1488,8 @@ function CerdosModule({role,toast}){
               <div style={{position:"relative",height:24,background:G.beige,borderRadius:4}}>
                 {segs.map((s,i)=><div key={i} title={s.title} style={{position:"absolute",left:`${s.l.toFixed(1)}%`,width:`${Math.max(s.w,0.5).toFixed(1)}%`,height:"100%",background:s.color,borderRadius:3,border:s.proj?"1px dashed rgba(0,0,0,.2)":"none"}}></div>)}
                 {dots.map((d,i)=><div key={i} title={d.title} style={{position:"absolute",left:`${d.x.toFixed(1)}%`,top:"50%",width:9,height:9,borderRadius:"50%",background:d.color,border:`1.5px solid ${G.white}`,transform:"translate(-50%,-50%)",zIndex:8}}></div>)}
-                <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:-6,bottom:-6,width:2,background:G.red,borderRadius:1,zIndex:10}}>
-                  <span style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",fontSize:10,color:"#fff",fontWeight:800,whiteSpace:"nowrap",background:G.red,padding:"1px 6px",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>hoy</span>
+                <div style={{position:"absolute",left:`${todayPct.toFixed(1)}%`,top:0,bottom:0,width:2,background:G.red,borderRadius:1,zIndex:10}}>
+                  <span style={{position:"absolute",bottom:-18,left:"50%",transform:"translateX(-50%)",fontSize:9,color:"#fff",fontWeight:800,whiteSpace:"nowrap",background:G.red,padding:"1px 5px",borderRadius:8,boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}>hoy</span>
                 </div>
               </div>
 
