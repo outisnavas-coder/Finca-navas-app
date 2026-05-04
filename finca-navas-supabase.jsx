@@ -1466,7 +1466,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       const fmtLabel=d=>{if(!d)return"";const dt=new Date(toMs(d));return dt.toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"});};
 
       // ── SECCIÓN 1: ESTADO ACTUAL ──
-      const estadoActual=cerdas.map(c=>{
+      const estadoActual=cerdas.filter(c=>c.estado==="Activa"&&c.tipo==="Madre").map(c=>{
         const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>toMs(b.fecha_parto)-toMs(a.fecha_parto));
         const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>toMs(b.fecha_monta)-toMs(a.fecha_monta));
         const lastParto=cPartos[0];
@@ -1530,14 +1530,15 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       while(cur.getTime()<tEndMs){
         const y=cur.getFullYear(),mo=cur.getMonth();
         const days=new Date(y,mo+1,0).getDate();
-        monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),daysInMonth:days,startPct:dPct(new Date(y,mo,1)),widthPct:((new Date(y,mo+1,1)-new Date(y,mo,1))/tTot)*100});
+        const mStart=new Date(y,mo,1,12,0,0),mEnd=new Date(y,mo+1,1,12,0,0);
+        monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),daysInMonth:days,startPct:dPct(mStart),widthPct:(mEnd-mStart)/tTot*100});
         cur.setMonth(cur.getMonth()+1);
       }
 
       // Filas históricas — solo cerdas activas
       const histRows=cerdas.filter(c=>c.estado==="Activa"&&c.tipo==="Madre").map(c=>{
-        const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>toMs(a.fecha_parto)-toMs(b.fecha_parto));
-        const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>toMs(a.fecha_monta)-toMs(b.fecha_monta));
+        const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>toMsL(a.fecha_parto)-toMsL(b.fecha_parto));
+        const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>toMsL(a.fecha_monta)-toMsL(b.fecha_monta));
         const lastParto=cPartos[cPartos.length-1];
         const lastMonta=cMontas[cMontas.length-1];
         const segs=[];const dots=[];
@@ -1603,9 +1604,10 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
                 <div key={i} style={{position:"absolute",left:`calc(88px + ${Math.max(ml.startPct,0)}%)`,width:`${ml.widthPct}%`,top:0,height:"100%",borderLeft:`1px solid ${G.beigeD}`}}>
                   <div style={{fontSize:10,fontWeight:600,color:G.g500,paddingLeft:3,whiteSpace:"nowrap"}}>{ml.m}</div>
                   <div style={{position:"relative",height:14}}>
-                    {Array.from({length:ml.daysInMonth},(_,i)=>i+1).filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>(
-                      <span key={d} style={{position:"absolute",left:`${((d-1)/ml.daysInMonth)*100}%`,transform:"translateX(-50%)",fontSize:7,color:G.g300}}>{d}</span>
-                    ))}
+                    {Array.from({length:ml.daysInMonth},(_,i)=>i+1).filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>{
+                      const dayPct=((d-1)/ml.daysInMonth)*100;
+                      return <span key={d} style={{position:"absolute",left:`${dayPct}%`,transform:"translateX(-50%)",fontSize:7,color:G.g300}}>{d}</span>;
+                    })}
                   </div>
                 </div>
               ))}
