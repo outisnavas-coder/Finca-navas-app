@@ -1473,7 +1473,7 @@ function CerdosModule({role,toast}){
           {monthLabels.map((ml,i)=><div key={i} style={{position:"absolute",left:`calc(90px + ${ml.startPct}%)`,width:`${ml.widthPct}%`,top:0,height:"100%",borderLeft:`0.5px solid ${G.beigeD}`}}>
             <div style={{fontSize:10,fontWeight:600,color:G.g500,textAlign:"center",paddingTop:2}}>{ml.m}</div>
             <div style={{position:"relative",height:14}}>
-              {ml.days.filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>{
+              {Array.from({length:ml.daysInMonth},(_,i)=>i+1).filter(d=>d===1||d%5===0||d===ml.daysInMonth).map(d=>{
                 const pct=((d-1)/ml.daysInMonth)*100;
                 return <span key={d} style={{position:"absolute",left:`${pct}%`,transform:"translateX(-50%)",fontSize:7,color:G.g300,lineHeight:1}}>{d}</span>;
               })}
