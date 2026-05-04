@@ -1153,15 +1153,7 @@ function CerdosModule({role,toast}){
                   <span style={{position:"absolute",top:-14,fontSize:9,color:G.red,fontWeight:600,transform:"translateX(-50%)",whiteSpace:"nowrap"}}>hoy</span>
                 </div>
               </div>
-              {checks.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:6}}>
-                {checks.map((ch,i)=><span key={i} style={{
-                  fontSize:10,padding:"2px 7px",borderRadius:20,
-                  background:ch.s==="done"?G.pale:ch.s==="alert"?G.redL:G.goldL,
-                  color:ch.s==="done"?G.g500:ch.s==="alert"?G.red:G.gold,
-                  fontWeight:ch.s==="done"?400:600,
-                  opacity:ch.s==="done"?0.6:1
-                }}>{ch.l}</span>)}
-              </div>}
+
             </div>
             <div style={{width:90,flexShrink:0,padding:"10px 8px",borderLeft:`0.5px solid ${G.beigeD}`,display:"flex",flexDirection:"column",justifyContent:"center",gap:3,fontSize:11,color:G.g500}}>
               <div>Partos: <strong style={{color:G.deep}}>{nPartos}</strong></div>
