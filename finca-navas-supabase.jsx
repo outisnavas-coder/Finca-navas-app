@@ -1472,32 +1472,36 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         const lastParto=cPartos[0];
         const lastMonta=cMontas[0];
         let estado="Sin datos",color=G.g300,bg=G.g100,pct=0,detalle="";
-        let barStart=null,barEnd=null,barColor=G.g300,esProyectado=false;
+        let barColor=G.g300,esProyectado=false;
 
         if(lastParto){
-          const diasDesdeParto=Math.ceil((TODAY.getTime()-toMs(lastParto.fecha_parto))/MS_DAY);
-          const destete=addDays(lastParto.fecha_parto,LACT);
+          // Usar fecha real de destete del protocolo si existe
+          const protoUltParto=protocolo.filter(x=>x.parto_id===lastParto.id);
+          const desteteProto=protoUltParto.find(x=>x.procedimiento==="Destete");
+          const fechaDestete=desteteProto?.fecha_real||desteteProto?.fecha_estimada||null;
+          const destete=fechaDestete?new Date(toMs(fechaDestete)):addDays(lastParto.fecha_parto,LACT);
           const descFin=addDays(destete,DESC);
           const proxMonta=new Date(Math.max(descFin.getTime(),TODAY.getTime()));
           const proxParto=addDays(proxMonta,GEST);
+          const diasDesdeParto=Math.ceil((TODAY.getTime()-toMs(lastParto.fecha_parto))/MS_DAY);
+          const diasDesdeDestete=Math.ceil((TODAY.getTime()-destete.getTime())/MS_DAY);
 
-          if(diasDesdeParto>=0&&diasDesdeParto<LACT){
+          if(TODAY<destete){
+            // En lactancia
+            const LACT_REAL=Math.ceil((destete.getTime()-toMs(lastParto.fecha_parto))/MS_DAY);
             estado=`Lactancia D${diasDesdeParto}`;color="#0F6E56";bg="#E1F5EE";
-            pct=(diasDesdeParto/LACT)*100;
-            barStart=lastParto.fecha_parto;barEnd=destete;barColor="#5DCAA5";
-            detalle=`Parió ${fmtLabel(lastParto.fecha_parto)} · ${lastParto.lechones_vivos} lechones · Destete est. ${fmtLabel(destete)}`;
-          } else if(TODAY<descFin){
-            const diasDesc=Math.ceil((TODAY.getTime()-destete.getTime())/MS_DAY);
-            estado=`Descanso D${diasDesc}`;color="#7B6FC4";bg="#EEF0FF";
-            pct=(diasDesc/DESC)*100;
-            barStart=destete;barEnd=descFin;barColor="#AFA9EC";
-            detalle=`Descanso/celo hasta ${fmtLabel(descFin)} · Próx. monta est. ${fmtLabel(proxMonta)}`;
+            pct=(diasDesdeParto/LACT_REAL)*100;barColor="#5DCAA5";
+            detalle=`Parió ${fmtLabel(lastParto.fecha_parto)} · ${lastParto.lechones_vivos} lechones · Destete ${desteteProto?.fecha_real?"real":"est."} ${fmtLabel(destete)}`;
+          } else if(diasDesdeDestete>=0&&TODAY<descFin){
+            // En descanso
+            estado=`Descanso D${diasDesdeDestete}`;color="#7B6FC4";bg="#EEF0FF";
+            pct=(diasDesdeDestete/DESC)*100;barColor="#AFA9EC";
+            detalle=`Descanso/celo · Destete ${fmtLabel(destete)} · Próx. monta est. ${fmtLabel(proxMonta)}`;
           } else {
             // En gestación proyectada
             const diasGest=Math.ceil((TODAY.getTime()-proxMonta.getTime())/MS_DAY);
             estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
-            pct=Math.min((diasGest/GEST)*100,100);esProyectado=true;
-            barStart=proxMonta;barEnd=proxParto;barColor="#9FE1CB";
+            pct=Math.min((diasGest/GEST)*100,100);esProyectado=true;barColor="#9FE1CB";
             detalle=`Gestación estimada · Parto proyectado ${fmtLabel(proxParto)}`;
           }
         } else if(lastMonta){
@@ -1505,13 +1509,11 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
           const diasGest=Math.ceil((TODAY.getTime()-toMs(lastMonta.fecha_monta))/MS_DAY);
           if(diasGest>=0&&diasGest<=GEST){
             estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
-            pct=(diasGest/GEST)*100;
-            barStart=lastMonta.fecha_monta;barEnd=proxParto;barColor="#9FE1CB";
+            pct=(diasGest/GEST)*100;barColor="#9FE1CB";
             detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. ${fmtLabel(proxParto)}`;
           }
         }
-        if(c.estado!=="Activa"){estado=c.estado;color=G.g500;bg=G.g100;pct=0;barColor=G.g300;}
-        return {c,estado,color,bg,pct,detalle,barStart,barEnd,barColor,esProyectado,lastParto,lastMonta};
+        return {c,estado,color,bg,pct,detalle,barColor,esProyectado,lastParto,lastMonta};
       });
 
       // ── SECCIÓN 2: HISTÓRICO (rango configurable) ──
