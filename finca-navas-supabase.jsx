@@ -1320,7 +1320,7 @@ function CerdosModule({role,toast}){
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
-    const base=new Date(TODAY.getFullYear(),TODAY.getMonth()-Math.floor(meses/2)+timelineOffset,1);
+    const base=new Date(TODAY.getFullYear(),TODAY.getMonth()-Math.round(meses/2)+timelineOffset,1);
     const tStart=new Date(base);
     const tEnd=new Date(tStart);tEnd.setMonth(tEnd.getMonth()+meses);
     const total=tEnd-tStart;
@@ -1328,7 +1328,7 @@ function CerdosModule({role,toast}){
 
     const monthLabels=[];
     let cur=new Date(tStart);
-    while(cur<tEnd){monthLabels.push(cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}));cur.setMonth(cur.getMonth()+1);}
+    while(cur<tEnd){const daysInMonth=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();const midDay=Math.round(daysInMonth/2);monthLabels.push({m:cur.toLocaleDateString("es-PA",{month:"short",year:"2-digit"}),d1:"1",d2:String(midDay),d3:String(daysInMonth)});cur.setMonth(cur.getMonth()+1);}
 
     const rows=cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=>{
       const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>a.fecha_parto.localeCompare(b.fecha_parto));
@@ -1468,7 +1468,10 @@ function CerdosModule({role,toast}){
             </div>)}
         </div>
         <div style={{display:"flex",marginBottom:4,paddingLeft:90}}>
-          {monthLabels.map((m,i)=><div key={i} style={{flex:1,fontSize:10,color:G.g500,textAlign:"center",borderLeft:`0.5px solid ${G.beigeD}`,paddingLeft:2}}>{m}</div>)}
+          {monthLabels.map((m,i)=><div key={i} style={{flex:1,fontSize:10,color:G.g500,borderLeft:`0.5px solid ${G.beigeD}`,paddingLeft:2}}>
+            <div style={{textAlign:"center",fontWeight:600,marginBottom:2}}>{m.m}</div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:G.g300,paddingRight:2}}><span>{m.d1}</span><span>{m.d2}</span><span>{m.d3}</span></div>
+          </div>)}
         </div>
         {rows.map(({c,segs,dots,proxParto,sLabel,sColor,sBg,checks,totalLech,nPartos})=><div key={c.id} className="card mb4" style={{overflow:"hidden"}}>
           <div style={{display:"flex",alignItems:"stretch"}}>
