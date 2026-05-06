@@ -156,6 +156,17 @@ const CSS = `
     h2{font-size:15px!important}
     h3{font-size:13px!important}
   }
+  .alerta-item{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:10px;margin-bottom:8px;border-left:4px solid transparent}
+  .alerta-item.critica{background:#FEF2F2;border-left-color:${G.red}}
+  .alerta-item.advertencia{background:${G.goldL};border-left-color:${G.gold}}
+  .alerta-item.info{background:#EEF2FF;border-left-color:#4F46E5}
+  .alerta-item.ok{background:#E1F5EE;border-left-color:#0F6E56}
+  .alerta-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+  .alerta-body{flex:1;min-width:0}
+  .alerta-titulo{font-size:13px;font-weight:700;color:${G.g900};line-height:1.3}
+  .alerta-sub{font-size:11.5px;color:${G.g500};margin-top:2px}
+  .alerta-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:${G.red};color:#fff;font-size:10px;font-weight:700;flex-shrink:0}
+  .nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:${G.red};color:#fff;font-size:10px;font-weight:700;padding:0 4px;margin-left:auto}
 `;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -163,6 +174,97 @@ const fmt$ = (n) => `$${Number(n||0).toLocaleString("es-PA",{minimumFractionDigi
 const MONTH_NAMES = ["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 const isConfigured = SUPABASE_URL !== "https://TU_PROJECT_ID.supabase.co";
+
+// ─── CALC ALERTAS ─────────────────────────────────────────────────────────────
+function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=[],inventario=[]}){
+  const TODAY=new Date();
+  const addD=(d,n)=>{const r=new Date(d+"T12:00:00");r.setDate(r.getDate()+n);return r;};
+  const diffD=(a,b)=>Math.ceil((new Date(typeof b==="string"?b+"T12:00:00":b)-new Date(typeof a==="string"?a+"T12:00:00":a))/(1000*60*60*24));
+  const toISO=d=>{if(!d)return"";if(typeof d==="string"&&d.length>=10)return d.substring(0,10);return new Date(d).toISOString().split("T")[0];};
+  const GEST=114,LACT=28,DESC=21;
+  const alertas=[];
+
+  // ── 1. PARTOS INMINENTES (gestación ≥100d = faltan ≤14d) ──────────────────
+  cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").forEach(c=>{
+    const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>b.fecha_monta.localeCompare(a.fecha_monta));
+    const lastMonta=cMontas[0];
+    if(!lastMonta)return;
+    const proxParto=addD(lastMonta.fecha_monta,GEST);
+    const diasFalta=diffD(TODAY,proxParto);
+    // Verificar que no haya parto real ya registrado después de esta monta
+    const partoYaRegistrado=partos.find(p=>p.cerda_id===c.id&&diffD(lastMonta.fecha_monta,p.fecha_parto)>=0&&diffD(lastMonta.fecha_monta,p.fecha_parto)<=130);
+    if(partoYaRegistrado)return;
+    if(diasFalta>=0&&diasFalta<=14){
+      alertas.push({id:`parto-${c.id}`,tipo:"critica",icono:"🐣",titulo:`Parto inminente — ${c.nombre}`,sub:`Estimado: ${proxParto.toLocaleDateString("es-PA",{day:"2-digit",month:"short"})} · Faltan ${diasFalta}d`,modulo:"cerdos_m",orden:1});
+    } else if(diasFalta>14&&diasFalta<=30){
+      alertas.push({id:`parto-prox-${c.id}`,tipo:"advertencia",icono:"🐷",titulo:`Parto próximo — ${c.nombre}`,sub:`Estimado en ${diasFalta} días · ${proxParto.toLocaleDateString("es-PA",{day:"2-digit",month:"short"})}`,modulo:"cerdos_m",orden:3});
+    }
+  });
+
+  // ── 2. CERDAS LISTAS PARA MONTA (descanso completado) ────────────────────
+  cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").forEach(c=>{
+    const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>b.fecha_parto.localeCompare(a.fecha_parto));
+    const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>b.fecha_monta.localeCompare(a.fecha_monta));
+    const lastParto=cPartos[0];
+    const lastMonta=cMontas[0];
+    if(!lastParto)return;
+    const destete=addD(lastParto.fecha_parto,LACT);
+    const descFin=addD(destete,DESC);
+    const diasDesdeParto=diffD(lastParto.fecha_parto,TODAY);
+    // Lista para monta si ya completó descanso y no tiene monta posterior al último parto
+    const montaPost=lastMonta&&diffD(lastParto.fecha_parto,lastMonta.fecha_monta)>0;
+    if(diasDesdeParto>=(LACT+DESC)&&!montaPost){
+      const diasLista=diasDesdeParto-(LACT+DESC);
+      alertas.push({id:`monta-${c.id}`,tipo:diasLista>14?"advertencia":"info",icono:"❤️",titulo:`Lista para monta — ${c.nombre}`,sub:`Lleva ${diasLista}d disponible desde el ${descFin.toLocaleDateString("es-PA",{day:"2-digit",month:"short"})}`,modulo:"cerdos_m",orden:2});
+    }
+  });
+
+  // ── 3. VACUNAS VENCIDAS / PRÓXIMAS ───────────────────────────────────────
+  vacunas.filter(v=>v.proxima_dosis).forEach(v=>{
+    const cerda=cerdas.find(c=>c.id===v.cerda_id);
+    const nombre=cerda?.nombre||v.cerdas?.nombre||"Cerda";
+    const dias=diffD(TODAY,v.proxima_dosis);
+    if(dias<0){
+      alertas.push({id:`vac-venc-${v.id}`,tipo:"critica",icono:"💉",titulo:`Vacuna VENCIDA — ${nombre}`,sub:`${v.vacuna} · Venció hace ${Math.abs(dias)}d`,modulo:"cerdos_m",orden:1});
+    } else if(dias<=7){
+      alertas.push({id:`vac-prox-${v.id}`,tipo:"advertencia",icono:"💉",titulo:`Vacuna próxima — ${nombre}`,sub:`${v.vacuna} · En ${dias}d (${new Date(v.proxima_dosis+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short"})})`,modulo:"cerdos_m",orden:2});
+    }
+  });
+
+  // ── 4. INVENTARIO BAJO ───────────────────────────────────────────────────
+  inventario.forEach(item=>{
+    if(item.cantidad<=item.minimo){
+      alertas.push({id:`inv-${item.id}`,tipo:"advertencia",icono:"📦",titulo:`Inventario bajo — ${item.item}`,sub:`Stock: ${item.cantidad} ${item.unidad} · Mínimo: ${item.minimo} ${item.unidad}`,modulo:"inventario",orden:3});
+    }
+  });
+
+  // ── 5. DEUDAS VENCIDAS ───────────────────────────────────────────────────
+  deudas.filter(d=>d.estado!=="Pagado"&&d.fecha_vence).forEach(d=>{
+    const dias=diffD(TODAY,d.fecha_vence);
+    if(dias<0){
+      alertas.push({id:`deuda-${d.id}`,tipo:"critica",icono:"📋",titulo:`Deuda vencida — ${d.nombre}`,sub:`${d.tipo==="pagar"?"Por pagar":"Por cobrar"} · ${fmt$(d.monto)} · Venció hace ${Math.abs(dias)}d`,modulo:"deudas",orden:1});
+    } else if(dias<=7){
+      alertas.push({id:`deuda-prox-${d.id}`,tipo:"advertencia",icono:"📋",titulo:`Deuda próxima — ${d.nombre}`,sub:`${d.tipo==="pagar"?"Por pagar":"Por cobrar"} · ${fmt$(d.monto)} · Vence en ${dias}d`,modulo:"deudas",orden:2});
+    }
+  });
+
+  // ── 6. LECHONES DISPONIBLES SIN VENDER (>30 días desde último parto) ─────
+  const totalNacidos=partos.reduce((s,p)=>s+p.lechones_vivos,0);
+  const totalVendidos=ventas.filter(v=>v.tipo!=="transferencia"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0);
+  const totalTransf=ventas.filter(v=>v.tipo==="transferencia").reduce((s,v)=>s+v.cantidad,0);
+  const disponibles=totalNacidos-totalVendidos-totalTransf;
+  if(disponibles>0){
+    const ultimoParto=partos.sort((a,b)=>b.fecha_parto.localeCompare(a.fecha_parto))[0];
+    if(ultimoParto){
+      const diasDesde=diffD(ultimoParto.fecha_parto,TODAY);
+      if(diasDesde>30){
+        alertas.push({id:"lechones-disp",tipo:"info",icono:"🐽",titulo:`${disponibles} lechones disponibles sin vender`,sub:`Último parto hace ${diasDesde}d · Revisar ventas pendientes`,modulo:"cerdos_m",orden:4});
+      }
+    }
+  }
+
+  return alertas.sort((a,b)=>a.orden-b.orden);
+}
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
 function Toast({msg,type,onDone}){
@@ -2118,6 +2220,136 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
 }
 
 
+// ─── ALERTAS PANEL (mini, para Dashboard) ─────────────────────────────────────
+function AlertasPanel({alertas,onVerTodas}){
+  const criticas=alertas.filter(a=>a.tipo==="critica");
+  const advertencias=alertas.filter(a=>a.tipo==="advertencia");
+  const infos=alertas.filter(a=>a.tipo==="info");
+  if(alertas.length===0)return(
+    <div className="card mb4">
+      <div className="card-h"><h3>🔔 Alertas del Sistema</h3></div>
+      <div className="card-b" style={{textAlign:"center",padding:"24px 0",color:G.g500}}>
+        <div style={{fontSize:32,marginBottom:8}}>✅</div>
+        <div style={{fontWeight:600,color:"#0F6E56"}}>Todo en orden</div>
+        <div style={{fontSize:12,marginTop:4}}>Sin alertas pendientes</div>
+      </div>
+    </div>
+  );
+  const mostrar=alertas.slice(0,4);
+  return(
+    <div className="card mb4">
+      <div className="card-h">
+        <h3>🔔 Alertas del Sistema</h3>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {criticas.length>0&&<span className="badge br">🔴 {criticas.length} crítica{criticas.length>1?"s":""}</span>}
+          {advertencias.length>0&&<span className="badge bo">⚠ {advertencias.length}</span>}
+          {infos.length>0&&<span className="badge bb">{infos.length} info</span>}
+          <button className="btn btn-o btn-sm" onClick={onVerTodas}>Ver todas →</button>
+        </div>
+      </div>
+      <div className="card-b" style={{paddingTop:12}}>
+        {mostrar.map(a=>(
+          <div key={a.id} className={`alerta-item ${a.tipo}`}>
+            <span className="alerta-icon">{a.icono}</span>
+            <div className="alerta-body">
+              <div className="alerta-titulo">{a.titulo}</div>
+              <div className="alerta-sub">{a.sub}</div>
+            </div>
+          </div>
+        ))}
+        {alertas.length>4&&<div style={{textAlign:"center",paddingTop:8}}>
+          <button className="btn btn-o btn-sm" onClick={onVerTodas}>Ver {alertas.length-4} más →</button>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── ALERTAS PAGE (completa) ──────────────────────────────────────────────────
+function AlertasPage({alertas,onNavegar}){
+  const [filtro,setFiltro]=useState("todas");
+  const criticas=alertas.filter(a=>a.tipo==="critica");
+  const advertencias=alertas.filter(a=>a.tipo==="advertencia");
+  const infos=alertas.filter(a=>a.tipo==="info");
+  const filtradas=filtro==="todas"?alertas:alertas.filter(a=>a.tipo===filtro);
+
+  const tipoLabel={critica:"Crítica",advertencia:"Advertencia",info:"Informativa"};
+  const tipoColor={critica:G.red,advertencia:G.gold,info:"#4F46E5"};
+
+  return(
+    <div>
+      {/* Resumen cards */}
+      <div className="sg mb4">
+        <div className="sc" style={{cursor:"pointer",border:filtro==="critica"?`2px solid ${G.red}`:`1px solid ${G.beigeD}`}} onClick={()=>setFiltro(f=>f==="critica"?"todas":"critica")}>
+          <span className="si">🔴</span>
+          <span className="sl">Críticas</span>
+          <span className="sv" style={{color:criticas.length>0?G.red:G.g500}}>{criticas.length}</span>
+          <span className="str" style={{color:G.g500}}>Acción inmediata</span>
+        </div>
+        <div className="sc" style={{cursor:"pointer",border:filtro==="advertencia"?`2px solid ${G.gold}`:`1px solid ${G.beigeD}`}} onClick={()=>setFiltro(f=>f==="advertencia"?"todas":"advertencia")}>
+          <span className="si">⚠️</span>
+          <span className="sl">Advertencias</span>
+          <span className="sv" style={{color:advertencias.length>0?G.gold:G.g500}}>{advertencias.length}</span>
+          <span className="str" style={{color:G.g500}}>Revisar pronto</span>
+        </div>
+        <div className="sc" style={{cursor:"pointer",border:filtro==="info"?`2px solid #4F46E5`:`1px solid ${G.beigeD}`}} onClick={()=>setFiltro(f=>f==="info"?"todas":"info")}>
+          <span className="si">ℹ️</span>
+          <span className="sl">Informativas</span>
+          <span className="sv" style={{color:"#4F46E5"}}>{infos.length}</span>
+          <span className="str" style={{color:G.g500}}>Sin urgencia</span>
+        </div>
+        <div className="sc grn">
+          <span className="si">🔔</span>
+          <span className="sl">Total Alertas</span>
+          <span className="sv">{alertas.length}</span>
+          <span className="str">{alertas.length===0?"Todo en orden":"Pendientes"}</span>
+        </div>
+      </div>
+
+      {/* Lista filtrada */}
+      {alertas.length===0?(
+        <div className="card">
+          <div className="card-b" style={{textAlign:"center",padding:"48px 0"}}>
+            <div style={{fontSize:48,marginBottom:12}}>✅</div>
+            <div style={{fontSize:18,fontWeight:700,color:"#0F6E56",marginBottom:6}}>¡Todo en orden!</div>
+            <div style={{color:G.g500,fontSize:13}}>No hay alertas activas en este momento</div>
+          </div>
+        </div>
+      ):(
+        <div className="card">
+          <div className="card-h">
+            <h3>📋 {filtro==="todas"?"Todas las alertas":`Alertas ${tipoLabel[filtro]}s`}</h3>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {["todas","critica","advertencia","info"].map(f=>(
+                <button key={f} className={`btn btn-sm ${filtro===f?"btn-p":"btn-o"}`} onClick={()=>setFiltro(f)}>
+                  {f==="todas"?"Todas":f==="critica"?"🔴 Críticas":f==="advertencia"?"⚠ Advertencias":"ℹ Info"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="card-b" style={{paddingTop:12}}>
+            {filtradas.length===0?(
+              <div style={{textAlign:"center",padding:"24px 0",color:G.g500}}>Sin alertas de este tipo</div>
+            ):filtradas.map(a=>(
+              <div key={a.id} className={`alerta-item ${a.tipo}`} style={{cursor:a.modulo?"pointer":"default"}} onClick={()=>a.modulo&&onNavegar&&onNavegar(a.modulo)}>
+                <span className="alerta-icon">{a.icono}</span>
+                <div className="alerta-body">
+                  <div className="alerta-titulo">{a.titulo}</div>
+                  <div className="alerta-sub">{a.sub}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+                  <span style={{fontSize:10,padding:"2px 7px",borderRadius:20,fontWeight:700,background:a.tipo==="critica"?G.redL:a.tipo==="advertencia"?G.goldL:"#EEF2FF",color:tipoColor[a.tipo]}}>{tipoLabel[a.tipo]}</span>
+                  {a.modulo&&<span style={{fontSize:10,color:G.g500}}>→ Ver módulo</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 export default function App(){
   const [user,setUser]=useState(null);
@@ -2128,6 +2360,12 @@ export default function App(){
   const [ingresos,setIngresos]=useState([]);
   const [deudas,setDeudas]=useState([]);
   const [inventario,setInventario]=useState([]);
+  // ── datos porcinos para alertas ──
+  const [cerdas,setCerdas]=useState([]);
+  const [partos,setPartos]=useState([]);
+  const [montas,setMontas]=useState([]);
+  const [vacunas,setVacunas]=useState([]);
+  const [ventas,setVentas]=useState([]);
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState(null);
 
@@ -2159,13 +2397,19 @@ export default function App(){
   const fetchAll=useCallback(async()=>{
     if(!user)return;
     setLoading(true);
-    const [g,i,d,inv]=await Promise.all([
+    const [g,i,d,inv,c,p,m,v,vt]=await Promise.all([
       supabase.from("gastos").select("*").order("fecha",{ascending:false}),
       supabase.from("ingresos").select("*").order("fecha",{ascending:false}),
       supabase.from("deudas").select("*").order("created_at",{ascending:false}),
       supabase.from("inventario").select("*").order("categoria"),
+      supabase.from("cerdas").select("*"),
+      supabase.from("partos").select("*").order("fecha_parto",{ascending:false}),
+      supabase.from("celos_montas").select("*").order("fecha_monta",{ascending:false}),
+      supabase.from("vacunas_cerdas").select("*,cerdas(nombre)").order("fecha",{ascending:false}),
+      supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
     ]);
     setGastos(g.data||[]);setIngresos(i.data||[]);setDeudas(d.data||[]);setInventario(inv.data||[]);
+    setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);setVacunas(v.data||[]);setVentas(vt.data||[]);
     setLoading(false);
   },[user]);
 
@@ -2175,6 +2419,7 @@ export default function App(){
 
   const nav=[
     {id:"dashboard",label:"Dashboard",icon:"◼",group:"Principal"},
+    {id:"alertas",label:"Alertas",icon:"🔔",group:"Principal"},
     {id:"cerdos_m",label:"Producción Porcina",icon:"🐷",group:"Producción"},
     {id:"name_m",label:"Producción de Ñame",icon:"🌿",group:"Producción"},
     {id:"finanzas",label:"Finanzas",icon:"💰",group:"Gestión"},
@@ -2183,10 +2428,13 @@ export default function App(){
     {id:"reportes",label:"Reportes",icon:"📊",group:"Análisis"},
   ];
   const groups=[...new Set(nav.map(n=>n.group))];
-  const titles={dashboard:"Dashboard General",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes & Análisis"};
+  const titles={dashboard:"Dashboard General",alertas:"Alertas del Sistema",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes & Análisis"};
   const role=user?.perfil?.rol||"encargado";
   const nombre=user?.perfil?.nombre||user?.email||"Usuario";
   const initials=nombre.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
+
+  const alertas=calcAlertas({cerdas,partos,montas,vacunas,ventas,deudas,inventario});
+  const alertasCriticas=alertas.filter(a=>a.tipo==="critica").length;
 
   const [dashAnio,setDashAnio]=useState(new Date().getFullYear());
   const totG2026=(dashAnio==="todo"?gastos:gastos.filter(g=>g.anio===dashAnio)).reduce((s,g)=>s+Number(g.monto),0);
@@ -2206,6 +2454,7 @@ export default function App(){
             <div className="nav-lbl">{g}</div>
             {nav.filter(n=>n.group===g).map(n=><div key={n.id} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>{setPage(n.id);if(mobile)setSideOpen(false);}}>
               <span style={{fontSize:15}}>{n.icon}</span>{n.label}
+              {n.id==="alertas"&&alertas.length>0&&<span className="nav-badge">{alertasCriticas>0?alertasCriticas:alertas.length}</span>}
             </div>)}
           </div>)}
         </div>
@@ -2224,6 +2473,9 @@ export default function App(){
           <div className="fl gap2" style={{alignItems:"center"}}>
             {!mobile&&<div style={{fontSize:12,color:G.g500}}>{dashAnio==="todo"?"Total":"Balance "+dashAnio}: <span style={{fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</span></div>}
             {mobile&&<div style={{fontSize:12,fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</div>}
+            {alertas.length>0&&<button className="btn btn-sm" style={{position:"relative",background:alertasCriticas>0?G.red:G.gold,color:"#fff",border:"none",padding:"5px 10px"}} onClick={()=>setPage("alertas")}>
+              🔔 {alertas.length}
+            </button>}
             <button className="btn btn-o btn-sm" onClick={fetchAll} disabled={loading}>{loading?"↺":"↺"}{!mobile&&" Sync"}</button>
           </div>
         </header>
@@ -2232,7 +2484,8 @@ export default function App(){
           {!isConfigured&&<ConfigBanner/>}
           {loading&&<Loading/>}
           {!loading&&<>
-            {page==="dashboard"&&<Dashboard gastos={gastos} ingresos={ingresos} onAnioChange={setDashAnio}/>}
+            {page==="dashboard"&&<><AlertasPanel alertas={alertas} onVerTodas={()=>setPage("alertas")}/><Dashboard gastos={gastos} ingresos={ingresos} onAnioChange={setDashAnio}/></>}
+            {page==="alertas"&&<AlertasPage alertas={alertas} onNavegar={setPage}/>}
             {page==="finanzas"&&<Finanzas gastos={gastos} ingresos={ingresos} onRefresh={fetchAll} role={role} toast={showToast}/>}
             {page==="deudas"&&<Deudas deudas={deudas} onRefresh={fetchAll} role={role} toast={showToast}/>}
             {page==="inventario"&&<Inventario inventario={inventario} onRefresh={fetchAll} role={role} toast={showToast}/>}
