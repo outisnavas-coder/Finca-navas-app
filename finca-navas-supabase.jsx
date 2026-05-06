@@ -180,13 +180,15 @@ function Login({onLogin}){
 
   const go=async e=>{
     e.preventDefault();
-    if(!isConfigured){setErr("Configura Supabase primero (ver banner superior)");return;}
+    if(!isConfigured){setErr("Configura Supabase primero");return;}
     setLoading(true);setErr("");
-    const {data,error}=await supabase.auth.signInWithPassword({email,password:pass});
-    if(error){setErr(error.message);setLoading(false);return;}
-    // Get profile
-    const {data:perfil}=await supabase.from("perfiles").select("*").eq("id",data.user.id).single();
-    onLogin({...data.user,perfil});
+    try{
+      const {data,error}=await supabase.auth.signInWithPassword({email,password:pass});
+      if(error){setErr(error.message);setLoading(false);return;}
+      let perfil=null;
+      try{const {data:p}=await supabase.from("perfiles").select("*").eq("id",data.user.id).single();perfil=p;}catch(e){}
+      onLogin({...data.user,perfil});
+    }catch(e){setErr("Error de conexión. Verifica tu internet.");}
     setLoading(false);
   };
 
