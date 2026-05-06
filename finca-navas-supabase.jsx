@@ -1728,11 +1728,23 @@ function CerdosModule({role,toast,userId,userName}){
     const lastMonta=cMontas[0];
     // DEBUG temporal — ver en consola del browser
     if(cerda.nombre==="Iris"){
+      const _montaActiva=lastMonta&&(!lastParto||
+        toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
+      const _fm=toDate(lastMonta?.fecha_monta);
+      const _proxParto=_fm?addD(_fm,GEST):null;
+      const _diasGest=_proxParto?(GEST-diffD(TODAY,_proxParto)):null;
       console.log("IRIS DEBUG:",{
         totalMontas:cMontas.length,
         lastMonta:lastMonta?.fecha_monta,
         lastParto:lastParto?.fecha_parto,
-        montasRaw:montas.filter(m=>m.cerda_id===cerda.id).map(m=>m.fecha_monta)
+        montasRaw:montas.filter(m=>m.cerda_id===cerda.id).map(m=>m.fecha_monta),
+        montaActiva:_montaActiva,
+        fm:_fm,
+        proxParto:_proxParto?.toISOString?.(),
+        diasGest:_diasGest,
+        GEST,LACT,DESC,
+        toDateMs_monta:toDateMs(lastMonta?.fecha_monta),
+        toDateMs_parto:toDateMs(lastParto?.fecha_parto),
       });
     }
     const montaActiva=lastMonta&&(!lastParto||
@@ -2154,7 +2166,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
     })()}
 
     {/* ── INVENTARIO ── */}
-    {tab==="cerdas"&&<div>
+    {tab==="cerdas"&&<div key={`inv-${montas.length}-${partos.length}-${montas.map(m=>m.id).join("")}`}>
       <div className="card mb4">
         <div className="card-h"><h3>🐷 Cerdas Madres Activas</h3><span className="badge bg">{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").length}</span></div>
         <div className="tw"><table>
