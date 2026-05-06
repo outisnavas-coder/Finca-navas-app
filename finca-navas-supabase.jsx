@@ -1702,26 +1702,43 @@ function CerdosModule({role,toast,userId,userName}){
   vacunas.forEach(v=>{const n=getCerdaNombre(v.cerda_id);if(!vacunasByCerda[n])vacunasByCerda[n]=[];vacunasByCerda[n].push(v);});
 
   const estadoBadge=(e)=>e==="Activa"?"bg":e==="Muerta"?"br":e==="Vendida"?"bo":"bk";
+  // Normaliza cualquier formato de fecha a YYYY-MM-DD string
+  const toDate=(d)=>{
+    if(!d)return null;
+    if(typeof d==="string"){
+      // Si ya es YYYY-MM-DD
+      if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;
+      // Si es timestamp, extraer solo la fecha
+      return d.substring(0,10);
+    }
+    if(d instanceof Date)return d.toISOString().substring(0,10);
+    return null;
+  };
+  const toDateMs=(d)=>{const s=toDate(d);return s?new Date(s+"T12:00:00").getTime():0;};
+
   const estadoProduccion=(cerda)=>{
     if(cerda.estado!=="Activa")return{label:cerda.estado,color:G.g500,bg:G.g100};
-    const cPartos=partos.filter(p=>p.cerda_id===cerda.id).sort((a,b)=>b.fecha_parto.localeCompare(a.fecha_parto));
-    const cMontas=montas.filter(m=>m.cerda_id===cerda.id).sort((a,b)=>b.fecha_monta.localeCompare(a.fecha_monta));
+    const cPartos=partos.filter(p=>p.cerda_id===cerda.id)
+      .sort((a,b)=>toDateMs(b.fecha_parto)-toDateMs(a.fecha_parto));
+    const cMontas=montas.filter(m=>m.cerda_id===cerda.id)
+      .sort((a,b)=>toDateMs(b.fecha_monta)-toDateMs(a.fecha_monta));
     const lastParto=cPartos[0];
     const lastMonta=cMontas[0];
 
-    // Monta real (con o sin parto) que no tiene parto posterior registrado
     const montaActiva=lastMonta&&(!lastParto||
-      new Date(lastMonta.fecha_monta+"T12:00:00")>new Date(lastParto.fecha_parto+"T12:00:00"));
+      toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
 
     if(montaActiva){
-      const proxParto=addD(lastMonta.fecha_monta,GEST);
+      const fm=toDate(lastMonta.fecha_monta);
+      const proxParto=addD(fm,GEST);
       const diasGest=GEST-diffD(TODAY,proxParto);
       if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
       if(diasGest>GEST)return{label:"Parto pendiente",color:G.red,bg:G.redL};
     }
 
     if(lastParto){
-      const dp=diffD(lastParto.fecha_parto,TODAY);
+      const fp=toDate(lastParto.fecha_parto);
+      const dp=diffD(fp,TODAY);
       if(dp>=0&&dp<LACT)return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};
       if(dp>=LACT&&dp<LACT+DESC)return{label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};
     }
