@@ -1643,7 +1643,6 @@ function CerdosModule({role,toast,userId,userName}){
     return anos+"a"+(m>0?" "+m+"m":"");
   };
   const pctPos=(d,start,total)=>Math.max(0,Math.min(100,(new Date(d)-new Date(start))/total*100));
-  const TODAY=new Date();
   const ESTADOS=["Activa","Inactiva","Vendida","Muerta"];
   const VACUNAS_TIPOS=["Parvovirus","Erisipela","Leptospira","Influenza","PRRS","Vitaminas","Desparasitante","Hierro lechones","Otro"];
 
