@@ -2560,20 +2560,20 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
           ?<button className="btn btn-p" disabled={saving} onClick={async()=>{
               const{id}=editItem;
               const total=Number(form.precio_unit)*Number(form.cantidad);
-              const datos={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),total,comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||"",tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
+              const datos={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||"",tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
               await updateRow("ventas_lechones",id,datos);
-              await syncIngreso({...datos},id,"actualizar");
+              await syncIngreso({...datos,total},id,"actualizar");
             }}>{saving?"Guardando...":"Guardar cambios"}</button>
           :<button className="btn btn-p" disabled={saving} onClick={async()=>{
               const total=Number(form.precio_unit)*Number(form.cantidad);
-              const datos={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),total,comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas,tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
+              const datosInsert={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas,tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
               setSaving(true);
               try{
-                const{error}=await supabase.from("ventas_lechones").insert(datos);
+                const{error}=await supabase.from("ventas_lechones").insert(datosInsert);
                 if(error){toast(error.message,"error");return;}
-                const{data:nv}=await supabase.from("ventas_lechones").select("id").eq("fecha",datos.fecha).order("created_at",{ascending:false}).limit(1).single();
-                await syncIngreso(datos,nv?.id,"insertar");
-                await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:nv?.id,datosNuevos:datos});
+                const{data:nv}=await supabase.from("ventas_lechones").select("id").eq("fecha",datosInsert.fecha).order("created_at",{ascending:false}).limit(1).single();
+                await syncIngreso({...datosInsert,total},nv?.id,"insertar");
+                await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:nv?.id,datosNuevos:datosInsert});
                 toast("Venta guardada ✓");
                 await fetchPorcino(false);
                 setModal(null);setForm({});
