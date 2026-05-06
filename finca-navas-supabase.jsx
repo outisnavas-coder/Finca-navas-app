@@ -1445,6 +1445,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
 }
 
 // ─── MÓDULO PRODUCCIÓN PORCINA ────────────────────────────────────────────────
+function CerdosModule({role,toast}){
   const [tab,setTab]=useState("timeline");
   const [cerdas,setCerdas]=useState([]);
   const [partos,setPartos]=useState([]);
