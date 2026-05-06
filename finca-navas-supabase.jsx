@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
@@ -1714,39 +1714,32 @@ function CerdosModule({role,toast,userId,userName}){
   };
   const toDateMs=(d)=>{const s=toDate(d);return s?new Date(s+"T12:00:00").getTime():0;};
 
-  // Mapa de estado de producción — se recalcula cada vez que montas o partos cambian
-  const estadoProduccionMap=useMemo(()=>{
-    const map={};
-    cerdas.filter(c=>c.estado==="Activa"&&c.tipo==="Madre").forEach(c=>{
-      const cPartos=partos.filter(p=>p.cerda_id===c.id)
-        .sort((a,b)=>toDateMs(b.fecha_parto)-toDateMs(a.fecha_parto));
-      const cMontas=montas.filter(m=>m.cerda_id===c.id)
-        .sort((a,b)=>toDateMs(b.fecha_monta)-toDateMs(a.fecha_monta));
-      const lastParto=cPartos[0];
-      const lastMonta=cMontas[0];
-
-      const montaActiva=lastMonta&&(!lastParto||
-        toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
-
-      if(montaActiva){
-        const fm=toDate(lastMonta.fecha_monta);
-        const proxParto=addD(fm,GEST);
-        const diasGest=GEST-diffD(TODAY,proxParto);
-        if(diasGest>=0&&diasGest<=GEST){map[c.id]={label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};return;}
-        if(diasGest>GEST){map[c.id]={label:"Parto pendiente",color:G.red,bg:G.redL};return;}
-      }
-      if(lastParto){
-        const fp=toDate(lastParto.fecha_parto);
-        const dp=diffD(fp,TODAY);
-        if(dp>=0&&dp<LACT){map[c.id]={label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};return;}
-        if(dp>=LACT&&dp<LACT+DESC){map[c.id]={label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};return;}
-      }
-      map[c.id]={label:"Activa",color:G.deep,bg:G.pale};
-    });
-    return map;
-  },[cerdas,partos,montas]);
-
-  const estadoProduccion=(cerda)=>estadoProduccionMap[cerda.id]||{label:"Activa",color:G.deep,bg:G.pale};
+  // Mapa de estado de producción — función simple, se recalcula en cada render
+  const estadoProduccion=(cerda)=>{
+    if(cerda.estado!=="Activa")return{label:cerda.estado,color:G.g500,bg:G.g100};
+    const cPartos=partos.filter(p=>p.cerda_id===cerda.id)
+      .sort((a,b)=>toDateMs(b.fecha_parto)-toDateMs(a.fecha_parto));
+    const cMontas=montas.filter(m=>m.cerda_id===cerda.id)
+      .sort((a,b)=>toDateMs(b.fecha_monta)-toDateMs(a.fecha_monta));
+    const lastParto=cPartos[0];
+    const lastMonta=cMontas[0];
+    const montaActiva=lastMonta&&(!lastParto||
+      toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
+    if(montaActiva){
+      const fm=toDate(lastMonta.fecha_monta);
+      const proxParto=addD(fm,GEST);
+      const diasGest=GEST-diffD(TODAY,proxParto);
+      if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
+      if(diasGest>GEST)return{label:"Parto pendiente",color:G.red,bg:G.redL};
+    }
+    if(lastParto){
+      const fp=toDate(lastParto.fecha_parto);
+      const dp=diffD(fp,TODAY);
+      if(dp>=0&&dp<LACT)return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};
+      if(dp>=LACT&&dp<LACT+DESC)return{label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};
+    }
+    return{label:"Activa",color:G.deep,bg:G.pale};
+  };
 
   const buildTimelineData=()=>{
     const meses=timelineMeses;
