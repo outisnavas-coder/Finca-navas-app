@@ -1259,7 +1259,7 @@ function NameModule({role,toast,gastos,ingresos,userId,userName}){
     }
     setSaving(false);
     if(error){toast(error.message,"error");}
-    else{toast("Actividad completada ✓");setModal(null);setActEdit(null);setForm({});fetch();}
+    else{toast("Actividad completada ✓");await fetch();setModal(null);setActEdit(null);setForm({});}
   };
 
   if(loading)return<Loading msg="Cargando producción de Ñame..." onRetry={fetch}/>;
@@ -1655,7 +1655,8 @@ function CerdosModule({role,toast,userId,userName}){
     finally{setSaving(false);}
     if(ok){
       await logAudit({userId,userName,accion:"insertar",tabla,registroId:newId,datosNuevos:datos});
-      setModal(null);setForm({});fetchPorcino(false);
+      await fetchPorcino(false);
+      setModal(null);setForm({});
     }
   };
 
@@ -1671,7 +1672,8 @@ function CerdosModule({role,toast,userId,userName}){
     finally{setSaving(false);}
     if(ok){
       await logAudit({userId,userName,accion:"actualizar",tabla,registroId:id,datosPrev,datosNuevos:clean});
-      setModal(null);setForm({});setEditItem(null);fetchPorcino(false);
+      await fetchPorcino(false);
+      setModal(null);setForm({});setEditItem(null);
     }
   };
 
@@ -1682,7 +1684,8 @@ function CerdosModule({role,toast,userId,userName}){
       if(error)toast(error.message,"error");
       else{
         await logAudit({userId,userName,accion:"eliminar",tabla,registroId:id});
-        toast("Eliminado ✓");fetchPorcino(false);
+        toast("Eliminado ✓");
+        await fetchPorcino(false);
       }
     }catch(e){toast(e.message,"error");}
   };
