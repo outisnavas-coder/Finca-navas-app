@@ -1726,33 +1726,13 @@ function CerdosModule({role,toast,userId,userName}){
       .sort((a,b)=>toDateMs(b.fecha_monta)-toDateMs(a.fecha_monta));
     const lastParto=cPartos[0];
     const lastMonta=cMontas[0];
-    // DEBUG temporal — ver en consola del browser
-    if(cerda.nombre==="Iris"){
-      const _montaActiva=lastMonta&&(!lastParto||
-        toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
-      const _fm=toDate(lastMonta?.fecha_monta);
-      const _proxParto=_fm?addD(_fm,GEST):null;
-      const _diasGest=_proxParto?(GEST-diffD(TODAY,_proxParto)):null;
-      console.log("IRIS DEBUG:",{
-        totalMontas:cMontas.length,
-        lastMonta:lastMonta?.fecha_monta,
-        lastParto:lastParto?.fecha_parto,
-        montasRaw:montas.filter(m=>m.cerda_id===cerda.id).map(m=>m.fecha_monta),
-        montaActiva:_montaActiva,
-        fm:_fm,
-        proxParto:_proxParto?.toISOString?.(),
-        diasGest:_diasGest,
-        GEST,LACT,DESC,
-        toDateMs_monta:toDateMs(lastMonta?.fecha_monta),
-        toDateMs_parto:toDateMs(lastParto?.fecha_parto),
-      });
-    }
     const montaActiva=lastMonta&&(!lastParto||
       toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
     if(montaActiva){
       const fm=toDate(lastMonta.fecha_monta);
       const proxParto=addD(fm,GEST);
-      const diasGest=GEST-diffD(TODAY,proxParto);
+      // Calcular días desde la monta directamente (no desde proxParto)
+      const diasGest=Math.floor((TODAY.getTime()-toDateMs(fm))/(1000*60*60*24));
       if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
       if(diasGest>GEST)return{label:"Parto pendiente",color:G.red,bg:G.redL};
     }
@@ -1956,7 +1936,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
 
         if(montaPostParto){
           const proxParto=addDays(tDate(lastMonta.fecha_monta),GEST);
-          const diasGest=Math.ceil((TODAY.getTime()-tDateMs(lastMonta.fecha_monta))/MS_DAY);
+          const diasGest=Math.floor((TODAY.getTime()-tDateMs(lastMonta.fecha_monta))/MS_DAY);
           if(diasGest>=0&&diasGest<=GEST){
             estado=`Gestación D${diasGest}`;color="#185FA5";bg="#E6F1FB";
             pct=(diasGest/GEST)*100;barColor="#FAC775";
