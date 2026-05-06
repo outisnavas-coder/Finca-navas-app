@@ -1709,29 +1709,21 @@ function CerdosModule({role,toast,userId,userName}){
     const lastParto=cPartos[0];
     const lastMonta=cMontas[0];
 
-    // Si hay monta posterior al último parto → está en gestación
-    const montaPostParto=lastMonta&&(!lastParto||
+    // Monta real (con o sin parto) que no tiene parto posterior registrado
+    const montaActiva=lastMonta&&(!lastParto||
       new Date(lastMonta.fecha_monta+"T12:00:00")>new Date(lastParto.fecha_parto+"T12:00:00"));
-    if(montaPostParto){
+
+    if(montaActiva){
       const proxParto=addD(lastMonta.fecha_monta,GEST);
-      const dm=diffD(TODAY,proxParto);
-      const diasGest=GEST-dm;
+      const diasGest=GEST-diffD(TODAY,proxParto);
       if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
+      if(diasGest>GEST)return{label:"Parto pendiente",color:G.red,bg:G.redL};
     }
 
-    // Si tiene parto reciente y NO hay monta posterior → lactancia o descanso
-    if(lastParto&&!montaPostParto){
+    if(lastParto){
       const dp=diffD(lastParto.fecha_parto,TODAY);
       if(dp>=0&&dp<LACT)return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};
       if(dp>=LACT&&dp<LACT+DESC)return{label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};
-    }
-
-    // Solo monta sin parto registrado
-    if(lastMonta&&!lastParto){
-      const proxParto=addD(lastMonta.fecha_monta,GEST);
-      const dm=diffD(TODAY,proxParto);
-      const diasGest=GEST-dm;
-      if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
     }
 
     return{label:"Activa",color:G.deep,bg:G.pale};
@@ -1920,7 +1912,9 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         let barColor=G.g300,esProyectado=false;
 
         // Si hay monta posterior al último parto → gestación real
-        const montaPostParto=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
+        // También aplica si hay monta y NO hay parto (Luna, Estrella)
+        const montaPostParto=lastMonta&&(!lastParto||
+          new Date(lastMonta.fecha_monta+"T12:00:00")>new Date(lastParto.fecha_parto+"T12:00:00"));
 
         if(montaPostParto){
           const proxParto=addDays(lastMonta.fecha_monta,GEST);
@@ -1929,6 +1923,11 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             estado=`Gestación D${diasGest}`;color="#185FA5";bg="#E6F1FB";
             pct=(diasGest/GEST)*100;barColor="#FAC775";
             detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. ${fmtLabel(proxParto)}`;
+          } else if(diasGest>GEST){
+            // Pasó el estimado sin parto registrado
+            estado="Parto pendiente";color=G.red;bg=G.redL;
+            pct=100;barColor=G.red;
+            detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. vencido ${fmtLabel(proxParto)}`;
           }
         } else if(lastParto){
           // Usar fecha real de destete del protocolo si existe
@@ -2007,21 +2006,31 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         const lastMonta=cMontas[cMontas.length-1];
         const segs=[];const dots=[];
 
-        // Segmentos por cada parto real
-        cPartos.forEach(p=>{
+        // Segmentos por cada parto real — cortar lactancia/descanso si hay monta posterior
+        cPartos.forEach((p,pi)=>{
           const gS=addDays(p.fecha_parto,-GEST);
           const lE=addDays(p.fecha_parto,LACT);
           const dE=addDays(lE,DESC);
-          const gs=dPct(gS),ge=dPct(p.fecha_parto),ls=ge,le=dPct(lE),ds=le,de=dPct(dE);
+          // Buscar si hay monta real que interrumpe la lactancia o descanso de este parto
+          const montaInterrupcion=cMontas.find(m=>toMsL(m.fecha_monta)>toMsL(p.fecha_parto)&&toMsL(m.fecha_monta)<toMsL(dE));
+          const corteLactDesc=montaInterrupcion?new Date(toMsL(montaInterrupcion.fecha_monta)):null;
+          const lEreal=corteLactDesc&&toMsL(corteLactDesc)<toMsL(lE)?corteLactDesc:lE;
+          const dEreal=corteLactDesc?corteLactDesc:dE;
+
+          const gs=dPct(gS),ge=dPct(p.fecha_parto);
+          const ls=ge,le=dPct(lEreal),ds=dPct(lE),de=dPct(dEreal);
           if(ge>gs&&ge>0&&gs<100)segs.push({l:Math.max(gs,0),w:Math.min(ge,100)-Math.max(gs,0),color:"#9FE1CB",title:`Gestación → Parto ${fmtLabel(p.fecha_parto)}`});
-          if(le>ls&&le>0&&ls<100)segs.push({l:Math.max(ls,0),w:Math.min(le,100)-Math.max(ls,0),color:"#5DCAA5",title:`Lactancia ${fmtLabel(p.fecha_parto)} → ${fmtLabel(lE)} · ${p.lechones_vivos} lechones`});
-          if(de>ds&&de>0&&ds<100)segs.push({l:Math.max(ds,0),w:Math.min(de,100)-Math.max(ds,0),color:"#AFA9EC",title:`Descanso hasta ${fmtLabel(dE)}`});
+          if(le>ls&&le>0&&ls<100)segs.push({l:Math.max(ls,0),w:Math.min(le,100)-Math.max(ls,0),color:"#5DCAA5",title:`Lactancia ${fmtLabel(p.fecha_parto)} → ${fmtLabel(lEreal)} · ${p.lechones_vivos} lechones`});
+          // Solo mostrar descanso si NO fue interrumpido por monta
+          if(!corteLactDesc||toMsL(corteLactDesc)>toMsL(lE)){
+            if(de>ds&&de>0&&ds<100)segs.push({l:Math.max(ds,0),w:Math.min(de,100)-Math.max(ds,0),color:"#AFA9EC",title:`Descanso hasta ${fmtLabel(dEreal)}`});
+          }
           const xp=dPct(p.fecha_parto);if(xp>=0&&xp<=100)dots.push({x:xp,color:"#378ADD",title:`Parto ${fmtLabel(p.fecha_parto)} · ${p.lechones_vivos} lech.`});
         });
         cMontas.forEach(m=>{const x=dPct(m.fecha_monta);if(x>=0&&x<=100)dots.push({x,color:"#639922",title:`Monta ${fmtLabel(m.fecha_monta)}`});});
 
-        // Próximo ciclo — si hay monta posterior al parto, usar esa monta real
-        const montaPostPartoH=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
+        // Próximo ciclo — si hay monta posterior al parto (o sin parto), usar esa monta real
+        const montaPostPartoH=lastMonta&&(!lastParto||toMsL(lastMonta.fecha_monta)>toMsL(lastParto.fecha_parto));
         if(montaPostPartoH){
           // Gestación real desde la monta registrada
           const proxParto=addDays(lastMonta.fecha_monta,GEST);
