@@ -107,6 +107,11 @@ const CSS = `
   .fil-row select{padding:7px 11px;border:1.5px solid ${G.g300};border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;color:${G.g900};background:#fff;outline:none}
   .fil-row select:focus{border-color:${G.mid}}
   footer{padding:14px 24px;border-top:1px solid ${G.beigeD};background:#fff;display:flex;justify-content:space-between;align-items:center}
+  *{box-sizing:border-box}
+  .app{overflow-x:hidden;max-width:100vw}
+  .main{overflow-x:hidden;max-width:100vw}
+  .content{overflow-x:hidden}
+  img{max-width:100%}
   @media(max-width:768px){
     .sidebar{transform:translateX(-256px)}.sidebar.open{transform:translateX(0)}
     .main{margin-left:0!important}.content{padding:10px}
@@ -130,8 +135,16 @@ const CSS = `
     .sg{grid-template-columns:1fr}
     .topbar h1{font-size:16px}
     .content{padding:8px}
-    .card-b{padding:14px}
-    .card-h{padding:12px 14px}
+    .card-b{padding:12px}
+    .card-h{padding:10px 12px}
+    .sc{padding:12px 10px}
+    .si{font-size:18px}
+    .sv{font-size:18px}
+    .sl{font-size:10px}
+    .btn{font-size:11px;padding:6px 10px}
+    .tw table{font-size:11px}
+    h2{font-size:15px!important}
+    h3{font-size:13px!important}
   }
 `;
 
