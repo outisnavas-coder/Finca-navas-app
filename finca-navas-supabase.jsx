@@ -1680,8 +1680,16 @@ function CerdosModule({role,toast,userId,userName}){
     }
   };
 
+  const [confirmDelete,setConfirmDelete]=useState(null); // {tabla, id, label}
+
   const deleteRow=async(tabla,id)=>{
-    if(!window.confirm("¿Eliminar este registro?"))return;
+    setConfirmDelete({tabla,id});
+  };
+
+  const confirmDeleteAction=async()=>{
+    if(!confirmDelete)return;
+    const{tabla,id}=confirmDelete;
+    setConfirmDelete(null);
     try{
       const {error}=await supabase.from(tabla).delete().eq("id",id);
       if(error)toast(error.message,"error");
@@ -1691,6 +1699,31 @@ function CerdosModule({role,toast,userId,userName}){
         await fetchPorcino(false);
       }
     }catch(e){toast(e.message,"error");}
+  };
+
+  // Sincronizar venta con tabla ingresos
+  const syncIngreso=async(venta,ventaId,accion="insertar")=>{
+    try{
+      const fecha=venta.fecha;
+      const dt=new Date(fecha+"T12:00:00");
+      const cat=venta.tipo==="Cerda"?"Ingresos por ventas (Cerdas Madres)":
+                venta.tipo==="Monta"?"Ingresos por Monta":"Ingresos por ventas (Lechones)";
+      const desc=`Venta ${venta.cantidad||1} ${venta.tipo||"lechón(es)"} – ${venta.comprador||""} – ${venta.notas||""}`.trim().replace(/–\s*$/,"");
+      if(accion==="insertar"){
+        await supabase.from("ingresos").insert({
+          fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
+          categoria:cat,descripcion:desc,
+          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
+          modulo:"Cerdos",venta_id:ventaId
+        });
+      } else if(accion==="actualizar"&&ventaId){
+        await supabase.from("ingresos").update({
+          fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
+          categoria:cat,descripcion:desc,
+          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
+        }).eq("venta_id",ventaId);
+      }
+    }catch(e){console.warn("syncIngreso error:",e.message);}
   };
 
   const openEdit=(tipo,item)=>{setEditItem({tipo,...item});setForm({...item});setModal("edit_"+tipo);};
@@ -2524,12 +2557,46 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       {form.cantidad&&form.precio_unit&&<p style={{fontSize:13,color:G.deep,fontWeight:700,marginTop:10}}>Total: {fmt$(Number(form.cantidad)*Number(form.precio_unit))}</p>}
       <div className="fl gap2 mt4">
         {modal==="edit_venta"
-          ?<button className="btn btn-p" disabled={saving} onClick={()=>{const{id}=editItem;updateRow("ventas_lechones",id,{fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||"",tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"});} }>{saving?"Guardando...":"Guardar cambios"}</button>
-          :<button className="btn btn-p" disabled={saving} onClick={()=>saveNew("ventas_lechones",{fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas,tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"})}>{saving?"Guardando...":"Guardar"}</button>
+          ?<button className="btn btn-p" disabled={saving} onClick={async()=>{
+              const{id}=editItem;
+              const total=Number(form.precio_unit)*Number(form.cantidad);
+              const datos={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),total,comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||"",tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
+              await updateRow("ventas_lechones",id,datos);
+              await syncIngreso({...datos},id,"actualizar");
+            }}>{saving?"Guardando...":"Guardar cambios"}</button>
+          :<button className="btn btn-p" disabled={saving} onClick={async()=>{
+              const total=Number(form.precio_unit)*Number(form.cantidad);
+              const datos={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),total,comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas,tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
+              setSaving(true);
+              try{
+                const{error}=await supabase.from("ventas_lechones").insert(datos);
+                if(error){toast(error.message,"error");return;}
+                const{data:nv}=await supabase.from("ventas_lechones").select("id").eq("fecha",datos.fecha).order("created_at",{ascending:false}).limit(1).single();
+                await syncIngreso(datos,nv?.id,"insertar");
+                await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:nv?.id,datosNuevos:datos});
+                toast("Venta guardada ✓");
+                await fetchPorcino(false);
+                setModal(null);setForm({});
+              }catch(e){toast(e.message,"error");}
+              finally{setSaving(false);}
+            }}>{saving?"Guardando...":"Guardar"}</button>
         }
         <button className="btn btn-o" onClick={()=>setModal(null)}>Cancelar</button>
       </div>
     </div></div>}
+
+  {/* ── MODAL CONFIRMAR ELIMINACIÓN ── */}
+  {confirmDelete&&<div className="mo" onClick={()=>setConfirmDelete(null)}><div className="md" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
+    <div style={{textAlign:"center",padding:"8px 0 16px"}}>
+      <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
+      <h3 style={{marginBottom:8}}>¿Eliminar registro?</h3>
+      <p style={{color:G.g500,fontSize:13}}>Esta acción no se puede deshacer.</p>
+    </div>
+    <div className="fl gap2 mt4" style={{justifyContent:"center"}}>
+      <button className="btn btn-sm" style={{background:G.red,color:"#fff",border:"none",padding:"8px 20px"}} onClick={confirmDeleteAction}>Sí, eliminar</button>
+      <button className="btn btn-o" onClick={()=>setConfirmDelete(null)}>Cancelar</button>
+    </div>
+  </div></div>}
 
   </div>;
 }
