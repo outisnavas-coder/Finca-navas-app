@@ -491,8 +491,17 @@ function Login({onLogin}){
 }
 
 // ─── LOADING SCREEN ───────────────────────────────────────────────────────────
-function Loading({msg="Cargando datos..."}){
-  return <div className="loading"><div className="spinner"></div><span>{msg}</span></div>;
+function Loading({msg="Cargando datos...",onRetry=null}){
+  const [slow,setSlow]=useState(false);
+  useEffect(()=>{const t=setTimeout(()=>setSlow(true),8000);return()=>clearTimeout(t);},[]);
+  return <div className="loading">
+    <div className="spinner"></div>
+    <span>{msg}</span>
+    {slow&&<div style={{marginTop:16,textAlign:"center"}}>
+      <p style={{fontSize:12,color:"#999",marginBottom:8}}>Tomando más tiempo de lo usual...</p>
+      {onRetry&&<button className="btn btn-o btn-sm" onClick={onRetry}>↺ Reintentar</button>}
+    </div>}
+  </div>;
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
@@ -1208,13 +1217,19 @@ function NameModule({role,toast,gastos,ingresos,userId,userName}){
   const [saving,setSaving]=useState(false);
 
   const fetch=async()=>{
-    const[{data:s},{data:a}]=await Promise.all([
-      supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
-      supabase.from("actividades_name").select("*").order("dias_estimado"),
-    ]);
-    setSiembras(s||[]);setActividades(a||[]);
-    if(!selSiembra&&s&&s.length)setSelSiembra(s[0].id);
-    setLoading(false);
+    setLoading(true);
+    try{
+      const[{data:s},{data:a}]=await Promise.all([
+        supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
+        supabase.from("actividades_name").select("*").order("dias_estimado"),
+      ]);
+      setSiembras(s||[]);setActividades(a||[]);
+      if(!selSiembra&&s&&s.length)setSelSiembra(s[0].id);
+    }catch(e){
+      console.warn("NameModule fetch error:",e.message);
+    }finally{
+      setLoading(false);
+    }
   };
   useEffect(()=>{fetch();},[]);
 
@@ -1247,7 +1262,7 @@ function NameModule({role,toast,gastos,ingresos,userId,userName}){
     else{toast("Actividad completada ✓");setModal(null);setActEdit(null);setForm({});fetch();}
   };
 
-  if(loading)return<div className="card"><div className="card-b" style={{textAlign:"center",padding:40,color:G.g500}}>Cargando...</div></div>;
+  if(loading)return<Loading msg="Cargando producción de Ñame..." onRetry={fetch}/>;
 
   const siembraActual=siembras.find(s=>s.id===selSiembra);
   const actsActual=actividades.filter(a=>a.siembra_id===selSiembra);
@@ -1575,17 +1590,22 @@ function CerdosModule({role,toast,userId,userName}){
 
   const fetchPorcino=async(showLoading=true)=>{
     if(showLoading)setLoading(true);
-    const [c,p,m,v,vt,pr]=await Promise.all([
-      supabase.from("cerdas").select("*").order("codigo"),
-      supabase.from("partos").select("*,cerdas(nombre,codigo)").order("fecha_parto",{ascending:false}),
-      supabase.from("celos_montas").select("*,cerdas!celos_montas_cerda_id_fkey(nombre,codigo)").order("fecha_monta",{ascending:false}),
-      supabase.from("vacunas_cerdas").select("*,cerdas(nombre,codigo)").order("fecha",{ascending:false}),
-      supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
-      supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
-    ]);
-    setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);
-    setVacunas(v.data||[]);setVentas(vt.data||[]);setProtocolo(pr.data||[]);
-    if(showLoading)setLoading(false);
+    try{
+      const [c,p,m,v,vt,pr]=await Promise.all([
+        supabase.from("cerdas").select("*").order("codigo"),
+        supabase.from("partos").select("*,cerdas(nombre,codigo)").order("fecha_parto",{ascending:false}),
+        supabase.from("celos_montas").select("*,cerdas!celos_montas_cerda_id_fkey(nombre,codigo)").order("fecha_monta",{ascending:false}),
+        supabase.from("vacunas_cerdas").select("*,cerdas(nombre,codigo)").order("fecha",{ascending:false}),
+        supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
+        supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
+      ]);
+      setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);
+      setVacunas(v.data||[]);setVentas(vt.data||[]);setProtocolo(pr.data||[]);
+    }catch(e){
+      console.warn("fetchPorcino error:",e.message);
+    }finally{
+      if(showLoading)setLoading(false);
+    }
   };
 
   useEffect(()=>{fetchPorcino();},[]);
@@ -1670,7 +1690,7 @@ function CerdosModule({role,toast,userId,userName}){
   const openEdit=(tipo,item)=>{setEditItem({tipo,...item});setForm({...item});setModal("edit_"+tipo);};
   const openNew=(tipo,defaults={})=>{setForm({...defaults});setModal("new_"+tipo);};
 
-  if(loading)return <div className="loading"><div className="spinner"></div><span>Cargando datos porcinos...</span></div>;
+  if(loading)return <Loading msg="Cargando datos porcinos..." onRetry={()=>fetchPorcino()}/>;
 
   // Group data
   const montasByCerda={};
@@ -2472,9 +2492,14 @@ function UsuariosPage({toast,userId,userName}){
 
   const fetch=async()=>{
     setLoading(true);
-    const{data}=await supabase.from("perfiles").select("*").order("nombre");
-    setPerfiles(data||[]);
-    setLoading(false);
+    try{
+      const{data}=await supabase.from("perfiles").select("*").order("nombre");
+      setPerfiles(data||[]);
+    }catch(e){
+      console.warn("Usuarios fetch error:",e.message);
+    }finally{
+      setLoading(false);
+    }
   };
   useEffect(()=>{fetch();},[]);
 
@@ -2581,9 +2606,14 @@ function AuditoriaPage({toast}){
   useEffect(()=>{
     (async()=>{
       setLoading(true);
-      const{data}=await supabase.from("auditoria").select("*").order("created_at",{ascending:false}).limit(200);
-      setLogs(data||[]);
-      setLoading(false);
+      try{
+        const{data}=await supabase.from("auditoria").select("*").order("created_at",{ascending:false}).limit(200);
+        setLogs(data||[]);
+      }catch(e){
+        console.warn("Auditoria fetch error:",e.message);
+      }finally{
+        setLoading(false);
+      }
     })();
   },[]);
 
@@ -2807,24 +2837,31 @@ export default function App(){
   const fetchAll=useCallback(async()=>{
     if(!user)return;
     setLoading(true);
-    const [g,i,d,inv,c,p,m,v,vt,s,an]=await Promise.all([
-      supabase.from("gastos").select("*").order("fecha",{ascending:false}),
-      supabase.from("ingresos").select("*").order("fecha",{ascending:false}),
-      supabase.from("deudas").select("*").order("created_at",{ascending:false}),
-      supabase.from("inventario").select("*").order("categoria"),
-      supabase.from("cerdas").select("*"),
-      supabase.from("partos").select("*").order("fecha_parto",{ascending:false}),
-      supabase.from("celos_montas").select("*").order("fecha_monta",{ascending:false}),
-      supabase.from("vacunas_cerdas").select("*,cerdas(nombre)").order("fecha",{ascending:false}),
-      supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
-      supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
-      supabase.from("actividades_name").select("*").order("fecha_estimada",{ascending:true}),
-    ]);
-    setGastos(g.data||[]);setIngresos(i.data||[]);setDeudas(d.data||[]);setInventario(inv.data||[]);
-    setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);setVacunas(v.data||[]);setVentas(vt.data||[]);
-    setSiembras(s.data||[]);setActividadesName(an.data||[]);
-    setLoading(false);
-  },[user]);
+    try{
+      const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("Timeout")),15000));
+      const queries=Promise.all([
+        supabase.from("gastos").select("*").order("fecha",{ascending:false}),
+        supabase.from("ingresos").select("*").order("fecha",{ascending:false}),
+        supabase.from("deudas").select("*").order("created_at",{ascending:false}),
+        supabase.from("inventario").select("*").order("categoria"),
+        supabase.from("cerdas").select("*"),
+        supabase.from("partos").select("*").order("fecha_parto",{ascending:false}),
+        supabase.from("celos_montas").select("*").order("fecha_monta",{ascending:false}),
+        supabase.from("vacunas_cerdas").select("*,cerdas(nombre)").order("fecha",{ascending:false}),
+        supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
+        supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
+        supabase.from("actividades_name").select("*").order("fecha_estimada",{ascending:true}),
+      ]);
+      const [g,i,d,inv,c,p,m,v,vt,s,an]=await Promise.race([queries,timeout]);
+      setGastos(g.data||[]);setIngresos(i.data||[]);setDeudas(d.data||[]);setInventario(inv.data||[]);
+      setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);setVacunas(v.data||[]);setVentas(vt.data||[]);
+      setSiembras(s.data||[]);setActividadesName(an.data||[]);
+    }catch(e){
+      console.warn("fetchAll error:",e.message);
+    }finally{
+      setLoading(false);
+    }
+  },[user?.id]);
 
   useEffect(()=>{fetchAll();},[fetchAll]);
 
@@ -2915,7 +2952,7 @@ export default function App(){
 
         <main className="content" style={{paddingBottom:mobile?"72px":""}}>
           {!isConfigured&&<ConfigBanner/>}
-          {loading&&<Loading/>}
+          {loading&&<Loading onRetry={fetchAll}/>}
           {!loading&&<>
             {page==="dashboard"&&PERMS.verDashboard(role)&&<><AlertasPanel alertas={alertas} onVerTodas={()=>setPage("alertas")}/><Dashboard gastos={gastos} ingresos={ingresos} onAnioChange={setDashAnio}/></>}
             {page==="alertas"&&<AlertasPage alertas={alertas} onNavegar={setPage}/>}
