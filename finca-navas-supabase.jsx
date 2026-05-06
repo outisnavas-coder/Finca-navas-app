@@ -1649,15 +1649,15 @@ function CerdosModule({role,toast,userId,userName}){
   // CRUD operations
   const saveNew=async(tabla,datos)=>{
     setSaving(true);
-    let ok=false,newId=null;
+    let ok=false;
     try{
-      const {data,error}=await supabase.from(tabla).insert(datos).select().single();
+      const {error}=await supabase.from(tabla).insert(datos);
       if(error)toast(error.message,"error");
-      else{ok=true;newId=data?.id;toast("Guardado ✓");}
+      else{ok=true;toast("Guardado ✓");}
     }catch(e){toast(e.message,"error");}
     finally{setSaving(false);}
     if(ok){
-      await logAudit({userId,userName,accion:"insertar",tabla,registroId:newId,datosNuevos:datos});
+      await logAudit({userId,userName,accion:"insertar",tabla,registroId:null,datosNuevos:datos});
       await fetchPorcino(false);
       setModal(null);setForm({});
     }
