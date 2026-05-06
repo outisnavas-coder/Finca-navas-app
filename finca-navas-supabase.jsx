@@ -1627,6 +1627,10 @@ function CerdosModule({role,toast,userId,userName}){
     const dt=new Date(d+"T12:00:00");
     return dt.toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"}).replace(/ /g,"-");
   };
+  // TODAY normalizado a mediodía para evitar problemas de timezone
+  const _todayRaw=new Date();
+  const TODAY=new Date(_todayRaw.getFullYear(),_todayRaw.getMonth(),_todayRaw.getDate(),12,0,0);
+
   const calcEdad=(fecha_nac,fecha_fin=null)=>{
     if(!fecha_nac)return"-";
     const desde=new Date(fecha_nac);
