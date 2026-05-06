@@ -175,6 +175,63 @@ const MONTH_NAMES = ["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","O
 
 const isConfigured = SUPABASE_URL !== "https://TU_PROJECT_ID.supabase.co";
 
+// ─── SISTEMA DE PERMISOS ──────────────────────────────────────────────────────
+// Roles: admin | socio | supervisor | operativo
+const ROLES_LABEL={admin:"Administrador",socio:"Socio",supervisor:"Supervisor",operativo:"Operativo"};
+const ROLES_COLOR={admin:G.deep,socio:"#0F6E56",supervisor:"#534AB7",operativo:G.gold};
+
+const PERMS={
+  // Navegación — qué páginas puede ver
+  verDashboard:    r=>["admin","socio"].includes(r),
+  verFinanzas:     r=>["admin","socio"].includes(r),
+  verDeudas:       r=>["admin","socio"].includes(r),
+  verInventario:   r=>["admin","socio"].includes(r),
+  verReportes:     r=>["admin","socio"].includes(r),
+  verAlertas:      r=>true, // todos
+  verCerdos:       r=>true, // todos
+  verName:         r=>true, // todos
+  verUsuarios:     r=>r==="admin",
+  verAuditoria:    r=>["admin","socio"].includes(r),
+
+  // Finanzas
+  registrarGastos: r=>["admin","socio","supervisor"].includes(r),
+  registrarIngresos:r=>["admin","socio"].includes(r),
+  verMontos:       r=>["admin","socio"].includes(r),
+
+  // Cerdos — operaciones
+  editarCerdas:    r=>["admin","socio"].includes(r),
+  registrarMontas: r=>["admin","socio","supervisor"].includes(r),
+  registrarPartos: r=>["admin","socio","supervisor"].includes(r),
+  registrarVacunas:r=>["admin","socio","supervisor"].includes(r),
+  registrarVentas: r=>["admin","socio"].includes(r),
+  completarActCerdos:r=>["admin","socio","supervisor","operativo"].includes(r),
+
+  // Ñame
+  editarSiembras:  r=>["admin","socio"].includes(r),
+  registrarGastosName:r=>["admin","socio","supervisor"].includes(r),
+  completarActName:r=>["admin","socio","supervisor","operativo"].includes(r),
+
+  // Admin
+  gestionUsuarios: r=>r==="admin",
+  eliminar:        r=>r==="admin",
+};
+
+// ─── AUDITORÍA ────────────────────────────────────────────────────────────────
+async function logAudit({userId,userName,accion,tabla,registroId,datosPrev=null,datosNuevos=null}){
+  try{
+    await supabase.from("auditoria").insert({
+      user_id:userId,
+      user_nombre:userName,
+      accion,
+      tabla,
+      registro_id:String(registroId||""),
+      datos_prev:datosPrev?JSON.stringify(datosPrev):null,
+      datos_nuevos:datosNuevos?JSON.stringify(datosNuevos):null,
+      created_at:new Date().toISOString(),
+    });
+  }catch(e){console.warn("Audit log failed:",e.message);}
+}
+
 // ─── CALC ALERTAS ─────────────────────────────────────────────────────────────
 function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=[],inventario=[],siembras=[],actividadesName=[]}){
   const TODAY=new Date();
@@ -512,9 +569,9 @@ function Finanzas({gastos,ingresos,onRefresh,role,toast}){
       <div className="tabs" style={{marginBottom:0,flex:1}}>
         {["todos","ingresos","gastos"].map(t=><button key={t} className={`tab ${tab===t?"active":""}`} onClick={()=>setTab(t)} style={{textTransform:"capitalize"}}>{t}</button>)}
       </div>
-      {role==="admin"&&<div className="fl gap2" style={{marginLeft:10}}>
-        <button className="btn btn-p btn-sm" onClick={()=>{setModal("ingreso");setForm({fecha:new Date().toISOString().split("T")[0]});}}>+ Ingreso</button>
-        <button className="btn btn-o btn-sm" onClick={()=>{setModal("gasto");setForm({fecha:new Date().toISOString().split("T")[0]});}}>+ Gasto</button>
+      {(PERMS.registrarGastos(role)||PERMS.registrarIngresos(role))&&<div className="fl gap2" style={{marginLeft:10}}>
+        {PERMS.registrarIngresos(role)&&<button className="btn btn-p btn-sm" onClick={()=>{setModal("ingreso");setForm({fecha:new Date().toISOString().split("T")[0]});}}>+ Ingreso</button>}
+        {PERMS.registrarGastos(role)&&<button className="btn btn-o btn-sm" onClick={()=>{setModal("gasto");setForm({fecha:new Date().toISOString().split("T")[0]});}}>+ Gasto</button>}
       </div>}
     </div>
     <div className="card">
@@ -572,12 +629,12 @@ function Deudas({deudas,onRefresh,role,toast}){
 
   const Tbl=({items,titulo,col})=><div className="card mb4">
     <div className="card-h"><h3>{titulo}</h3><span style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,color:col}}>{fmt$(items.reduce((s,d)=>s+Number(d.monto),0))}</span></div>
-    <div className="tw"><table><thead><tr><th>Nombre</th><th>Descripción</th><th>Monto</th><th>Vence</th><th>Estado</th>{role==="admin"&&<th></th>}</tr></thead>
+    <div className="tw"><table><thead><tr><th>Nombre</th><th>Descripción</th><th>Monto</th><th>Vence</th><th>Estado</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
     <tbody>{items.length===0?<tr><td colSpan={6} style={{textAlign:"center",padding:20,color:G.g500}}>Sin registros pendientes</td></tr>:items.map(d=><tr key={d.id}>
       <td style={{fontWeight:600}}>{d.nombre}</td><td style={{fontSize:12}}>{d.descripcion}</td>
       <td style={{fontWeight:700}}>{fmt$(d.monto)}</td><td>{d.fecha_vence||"-"}</td>
       <td><span className={`badge ${d.estado==="Pagado"?"bg":d.estado==="Vencido"?"br":"bo"}`}>{d.estado}</span></td>
-      {role==="admin"&&<td>{d.estado!=="Pagado"&&<button className="btn btn-sm btn-p" onClick={()=>marcar(d.id)}>✓</button>}</td>}
+      {PERMS.eliminar(role)&&<td>{d.estado!=="Pagado"&&<button className="btn btn-sm btn-p" onClick={()=>marcar(d.id)}>✓</button>}</td>}
     </tr>)}</tbody></table></div>
   </div>;
 
@@ -587,7 +644,7 @@ function Deudas({deudas,onRefresh,role,toast}){
       <div className="sc"><span className="si">📤</span><span className="sl">Por Pagar</span><span className="sv" style={{color:G.red}}>{fmt$(pagar.reduce((s,d)=>s+Number(d.monto),0))}</span></div>
       <div className="sc"><span className="si">⚠️</span><span className="sl">Vencidas</span><span className="sv" style={{color:G.gold}}>{deudas.filter(d=>d.estado==="Vencido").length}</span></div>
     </div>
-    {role==="admin"&&<div className="mb4"><button className="btn btn-p" onClick={()=>{setModal(true);setForm({});}}>+ Registrar Cuenta</button></div>}
+    {PERMS.eliminar(role)&&<div className="mb4"><button className="btn btn-p" onClick={()=>{setModal(true);setForm({});}}>+ Registrar Cuenta</button></div>}
     <Tbl items={cobrar} titulo="📥 Cuentas por Cobrar" col={G.deep}/>
     <Tbl items={pagar} titulo="📤 Cuentas por Pagar" col={G.red}/>
     <Modal open={modal} onClose={()=>setModal(false)} title="Nueva Cuenta">
@@ -623,7 +680,7 @@ function Inventario({inventario,onRefresh,role,toast}){
       <div className="sc"><span className="si">⚠️</span><span className="sl">Stock Bajo</span><span className="sv" style={{color:G.gold}}>{inventario.filter(i=>i.cantidad<=i.minimo).length}</span></div>
       <div className="sc grn"><span className="si">💵</span><span className="sl">Valor Total</span><span className="sv" style={{fontSize:18}}>{fmt$(inventario.reduce((s,i)=>s+i.cantidad*i.costo_unit,0))}</span></div>
     </div>
-    {role==="admin"&&<div className="mb4"><button className="btn btn-p" onClick={()=>{setModal(true);setForm({});}}>+ Agregar Item</button></div>}
+    {PERMS.eliminar(role)&&<div className="mb4"><button className="btn btn-p" onClick={()=>{setModal(true);setForm({});}}>+ Agregar Item</button></div>}
     {(cats.length===0?["Alimento","Medicina","Herramienta","Insumo Agrícola"]:cats).map(cat=>{
       const items=inventario.filter(i=>i.categoria===cat);
       if(items.length===0)return null;
@@ -1088,7 +1145,7 @@ function Reportes({gastos,ingresos}){
 
 
 // ─── MÓDULO ÑAME ─────────────────────────────────────────────────────────────
-function NameModule({role,toast,gastos,ingresos}){
+function NameModule({role,toast,gastos,ingresos,userId,userName}){
   const [siembras,setSiembras]=useState([]);
   const [actividades,setActividades]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -1130,6 +1187,9 @@ function NameModule({role,toast,gastos,ingresos}){
       costo:Number(form.costo)||0,
       mozos:Number(form.mozos)||0
     }).eq("id",actEdit.id);
+    if(!error){
+      await logAudit({userId,userName,accion:"completar_actividad",tabla:"actividades_name",registroId:actEdit.id,datosPrev:{estado:"pendiente"},datosNuevos:{estado:"completado",fecha_real:form.fecha_real,costo:form.costo,mozos:form.mozos}});
+    }
     setSaving(false);
     if(error){toast(error.message,"error");}
     else{toast("Actividad completada ✓");setModal(null);setActEdit(null);setForm({});fetch();}
@@ -1165,11 +1225,11 @@ function NameModule({role,toast,gastos,ingresos}){
       <div className="fl gap2">
         {siembras.map(s=><button key={s.id} className={`btn ${selSiembra===s.id?"btn-p":"btn-o"} btn-sm`}
           onClick={()=>setSelSiembra(s.id)}>{s.nombre}</button>)}
-        {role==="admin"&&<button className="btn btn-o btn-sm" onClick={()=>{setForm({nombre:"",fecha_siembra:"",hectareas:1,estado:"activa"});setModal("siembra");}}>+ Siembra</button>}
+        {PERMS.editarSiembras(role)&&<button className="btn btn-o btn-sm" onClick={()=>{setForm({nombre:"",fecha_siembra:"",hectareas:1,estado:"activa"});setModal("siembra");}}>+ Siembra</button>}
       </div>
       <div className="fl gap2">
-        {[["timeline","📅 Timeline"],["actividades","📋 Actividades"],["financiero","💰 Financiero"]].map(([k,l])=>
-          <button key={k} className={`btn btn-sm ${tab===k?"btn-p":"btn-o"}`} onClick={()=>setTab(k)}>{l}</button>)}
+        {[["timeline","📅 Timeline"],["actividades","📋 Actividades"],...(PERMS.verMontos(role)?[["financiero","💰 Financiero"]]:[])]
+          .map(([k,l])=><button key={k} className={`btn btn-sm ${tab===k?"btn-p":"btn-o"}`} onClick={()=>setTab(k)}>{l}</button>)}
       </div>
     </div>
 
@@ -1308,7 +1368,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
                   <span style={{fontWeight:700,color:catColor[a.categoria]||G.gold,fontSize:13}}>D{dias}</span>
                   <div style={{fontSize:10,color:G.g500}}>días</div>
-                  {role==="admin"&&<button className="btn btn-sm btn-p" style={{fontSize:11,padding:"3px 8px"}} onClick={()=>abrirMarcar(a)}>✓</button>}
+                  {PERMS.completarActCerdos(role)&&<button className="btn btn-sm btn-p" style={{fontSize:11,padding:"3px 8px"}} onClick={()=>abrirMarcar(a)}>✓</button>}
                 </div>
               </div>;
             })}
@@ -1319,7 +1379,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
                   <span style={{fontSize:12,color:G.red,fontWeight:600}}>{a.actividad}</span>
                   <div style={{fontSize:11,color:G.red,marginTop:2}}>Vencida: {fmtD(a.fecha_estimada)}</div>
                 </div>
-                {role==="admin"&&<button className="btn btn-sm btn-p" style={{fontSize:11,padding:"3px 8px",flexShrink:0}} onClick={()=>abrirMarcar(a)}>✓</button>}
+                {PERMS.completarActCerdos(role)&&<button className="btn btn-sm btn-p" style={{fontSize:11,padding:"3px 8px",flexShrink:0}} onClick={()=>abrirMarcar(a)}>✓</button>}
               </div>)}
             </div>}
           </div>
@@ -1336,7 +1396,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
           </div>
         </div>
         <div className="tw"><table>
-          <thead><tr><th>Día</th><th>Actividad</th><th>Categoría</th><th>F. Estimada</th><th>F. Real</th><th>Costo</th><th>Mozos</th><th>Estado</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Día</th><th>Actividad</th><th>Categoría</th><th>F. Estimada</th><th>F. Real</th>{PERMS.verMontos(role)&&<th>Costo</th>}<th>Mozos</th><th>Estado</th>{PERMS.completarActName(role)&&<th></th>}</tr></thead>
           <tbody>{actsActual.map(a=>{
             const venc=a.estado==="pendiente"&&new Date(a.fecha_estimada)<TODAY;
             return <tr key={a.id} style={{background:a.estado==="completado"?"#F8FFFB":venc?"#FFF5F5":"white"}}>
@@ -1345,10 +1405,10 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
               <td><span style={{fontSize:10,padding:"2px 8px",borderRadius:20,background:catBg[a.categoria]||G.goldL,color:catColor[a.categoria]||G.gold,fontWeight:600,textTransform:"capitalize"}}>{a.categoria}</span></td>
               <td style={{fontSize:12}}>{fmtD(a.fecha_estimada)}</td>
               <td style={{fontSize:12,color:"#0F6E56",fontWeight:a.fecha_real?600:400}}>{a.fecha_real?fmtD(a.fecha_real):"—"}</td>
-              <td style={{fontWeight:600,color:a.costo>0?G.red:G.g300}}>{a.costo>0?`$${Number(a.costo).toFixed(2)}`:"—"}</td>
+              {PERMS.verMontos(role)&&<td style={{fontWeight:600,color:a.costo>0?G.red:G.g300}}>{a.costo>0?`$${Number(a.costo).toFixed(2)}`:"—"}</td>}
               <td style={{textAlign:"center"}}>{a.mozos>0?a.mozos:"—"}</td>
               <td>{a.estado==="completado"?<span className="badge bg">✓ Listo</span>:venc?<span className="badge br">⚠ Vencida</span>:<span className="badge bo">Pendiente</span>}</td>
-              {role==="admin"&&<td>{a.estado!=="completado"&&<button className="btn btn-sm btn-p" onClick={()=>abrirMarcar(a)}>✓ Marcar</button>}</td>}
+              {PERMS.completarActName(role)&&<td>{a.estado!=="completado"&&<button className="btn btn-sm btn-p" onClick={()=>abrirMarcar(a)}>✓ Marcar</button>}</td>}
             </tr>;
           })}</tbody>
         </table></div>
@@ -1445,7 +1505,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
 }
 
 // ─── MÓDULO PRODUCCIÓN PORCINA ────────────────────────────────────────────────
-function CerdosModule({role,toast}){
+function CerdosModule({role,toast,userId,userName}){
   const [tab,setTab]=useState("timeline");
   const [cerdas,setCerdas]=useState([]);
   const [partos,setPartos]=useState([]);
@@ -1514,17 +1574,20 @@ function CerdosModule({role,toast}){
   // CRUD operations
   const saveNew=async(tabla,datos)=>{
     setSaving(true);
-    let ok=false;
+    let ok=false,newId=null;
     try{
-      const {error}=await supabase.from(tabla).insert(datos);
+      const {data,error}=await supabase.from(tabla).insert(datos).select().single();
       if(error)toast(error.message,"error");
-      else{ok=true;toast("Guardado ✓");}
+      else{ok=true;newId=data?.id;toast("Guardado ✓");}
     }catch(e){toast(e.message,"error");}
     finally{setSaving(false);}
-    if(ok){setModal(null);setForm({});fetchPorcino(false);}
+    if(ok){
+      await logAudit({userId,userName,accion:"insertar",tabla,registroId:newId,datosNuevos:datos});
+      setModal(null);setForm({});fetchPorcino(false);
+    }
   };
 
-  const updateRow=async(tabla,id,datos)=>{
+  const updateRow=async(tabla,id,datos,datosPrev=null)=>{
     setSaving(true);
     const clean=Object.fromEntries(Object.entries(datos).filter(([k,v])=>v===null||typeof v!=="object"||v instanceof Date));
     let ok=false;
@@ -1534,7 +1597,10 @@ function CerdosModule({role,toast}){
       else{ok=true;toast("Actualizado ✓");}
     }catch(e){toast(e.message,"error");}
     finally{setSaving(false);}
-    if(ok){setModal(null);setForm({});setEditItem(null);fetchPorcino(false);}
+    if(ok){
+      await logAudit({userId,userName,accion:"actualizar",tabla,registroId:id,datosPrev,datosNuevos:clean});
+      setModal(null);setForm({});setEditItem(null);fetchPorcino(false);
+    }
   };
 
   const deleteRow=async(tabla,id)=>{
@@ -1542,7 +1608,10 @@ function CerdosModule({role,toast}){
     try{
       const {error}=await supabase.from(tabla).delete().eq("id",id);
       if(error)toast(error.message,"error");
-      else{toast("Eliminado ✓");fetchPorcino(false);}
+      else{
+        await logAudit({userId,userName,accion:"eliminar",tabla,registroId:id});
+        toast("Eliminado ✓");fetchPorcino(false);
+      }
     }catch(e){toast(e.message,"error");}
   };
 
@@ -1714,7 +1783,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
           <button key={t} className={`tab ${tab===t?"active":""}`} onClick={()=>setTab(t)}>{l}</button>
         )}
       </div>
-      {role==="admin"&&tab!=="timeline"&&<button className="btn btn-p btn-sm" style={{marginLeft:8}} onClick={()=>openNew(
+      {PERMS.editarCerdas(role)&&tab!=="timeline"&&<button className="btn btn-p btn-sm" style={{marginLeft:8}} onClick={()=>openNew(
         tab==="cerdas"?"cerda":tab==="montas"?"monta":tab==="partos"?"parto":tab==="vacunas"?"vacuna":"venta",
         tab==="montas"?{fecha_monta:toISO(TODAY)}:tab==="partos"?{fecha_parto:toISO(TODAY)}:tab==="vacunas"?{fecha:toISO(TODAY)}:tab==="ventas"?{fecha:toISO(TODAY)}:{}
       )}>+ Agregar</button>}
@@ -1935,7 +2004,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       <div className="card mb4">
         <div className="card-h"><h3>🐷 Cerdas Madres Activas</h3><span className="badge bg">{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").length}</span></div>
         <div className="tw"><table>
-          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Producción</th><th className="hide-mobile">Nacimiento</th><th className="hide-mobile">Edad</th><th className="hide-mobile">Peso</th><th>Partos</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Producción</th><th className="hide-mobile">Nacimiento</th><th className="hide-mobile">Edad</th><th className="hide-mobile">Peso</th><th>Partos</th><th className="hide-mobile">Notas</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
           <tbody>{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=><tr key={c.id}>
             <td style={{fontFamily:"monospace",fontSize:12}}>{c.codigo}</td>
             <td style={{fontWeight:700}}>{c.nombre}</td>
@@ -1946,35 +2015,35 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             <td className="hide-mobile">{c.peso_kg?`${c.peso_kg}kg`:"-"}</td>
             <td style={{fontWeight:600,color:G.deep}}>{partos.filter(p=>p.cerda_id===c.id).length}</td>
             <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{c.notas||"-"}</td>
-            {role==="admin"&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
+            {PERMS.editarCerdas(role)&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
           </tr>)}</tbody>
         </table></div>
       </div>
       {cerdas.filter(c=>c.tipo==="Madre"&&c.estado!=="Activa").length>0&&<div className="card mb4">
         <div className="card-h"><h3>📋 Historial Madres</h3><span className="badge bk">{cerdas.filter(c=>c.tipo==="Madre"&&c.estado!=="Activa").length}</span></div>
         <div className="tw"><table>
-          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Partos</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Partos</th><th>Notas</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
           <tbody>{cerdas.filter(c=>c.tipo==="Madre"&&c.estado!=="Activa").map(c=><tr key={c.id}>
             <td style={{fontFamily:"monospace",fontSize:12}}>{c.codigo}</td>
             <td style={{fontWeight:600,color:G.g500}}>{c.nombre}</td>
             <td><span className={`badge ${estadoBadge(c.estado)}`}>{c.estado}</span></td>
             <td>{partos.filter(p=>p.cerda_id===c.id).length}</td>
             <td style={{fontSize:12,color:G.g500}}>{c.notas||"-"}</td>
-            {role==="admin"&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
+            {PERMS.editarCerdas(role)&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
           </tr>)}</tbody>
         </table></div>
       </div>}
       <div className="card">
         <div className="card-h"><h3>🐗 Verracos</h3></div>
         <div className="tw"><table>
-          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Peso</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Peso</th><th>Notas</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
           <tbody>{cerdas.filter(c=>c.tipo==="Verraco").map(c=><tr key={c.id}>
             <td style={{fontFamily:"monospace",fontSize:12}}>{c.codigo}</td>
             <td style={{fontWeight:700}}>{c.nombre}</td>
             <td><span className={`badge ${estadoBadge(c.estado)}`}>{c.estado}</span></td>
             <td>{c.peso_kg?`${c.peso_kg}kg`:"-"}</td>
             <td style={{fontSize:12,color:G.g500}}>{c.notas||"-"}</td>
-            {role==="admin"&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
+            {PERMS.editarCerdas(role)&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
           </tr>)}</tbody>
         </table></div>
       </div>
@@ -1987,14 +2056,14 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
           <h3>❤️ {nombre}</h3>
           <div className="fl gap2">
             <span className="badge bo">{mts.length} montas</span>
-            {role==="admin"&&<button className="btn btn-sm btn-p" onClick={()=>{
+            {PERMS.registrarMontas(role)&&<button className="btn btn-sm btn-p" onClick={()=>{
               const cerda=cerdas.find(c=>c.nombre===nombre);
               openNew("monta",{cerda_id:cerda?.id||"",fecha_monta:toISO(TODAY)});
             }}>+ Monta</button>}
           </div>
         </div>
         <div className="tw"><table className="montas-table">
-          <thead><tr><th className="fecha-col">Fecha Monta</th><th className="fecha-col">Parto Est. (114d)</th><th className="fecha-col">Parto Real</th><th>Días restantes</th><th>Confirmado</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th className="fecha-col">Fecha Monta</th><th className="fecha-col">Parto Est. (114d)</th><th className="fecha-col">Parto Real</th><th>Días restantes</th><th>Confirmado</th><th className="hide-mobile">Notas</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
           <tbody>{mts.map(m=>{
             const fp=m.fecha_monta?toISO(addD(m.fecha_monta,GEST)):"";
             const partoReal=partos.find(p=>p.cerda_id===m.cerda_id&&Math.abs(diffD(fp,p.fecha_parto))<=30);
@@ -2006,7 +2075,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
               <td>{dias!==null?<span style={{fontWeight:700,color:dias<0?G.g500:dias<14?G.red:dias<30?G.gold:G.deep}}>{dias<0?partoReal?"✓ Parto":"No preñada":dias+"d"}</span>:"-"}</td>
               <td><span className={`badge ${m.confirmado?"bg":"bo"}`}>{m.confirmado?"✓ Conf":"Pend."}</span></td>
               <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{m.notas||"-"}</td>
-              {role==="admin"&&<td style={{display:"flex",gap:4}}>
+              {PERMS.eliminar(role)&&<td style={{display:"flex",gap:4}}>
                 <button className="btn btn-sm btn-o" onClick={()=>openEdit("monta",m)}>✏</button>
                 <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("celos_montas",m.id)}>✕</button>
               </td>}
@@ -2028,18 +2097,18 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             <div className="fl gap2">
               <span className="badge bg">{pts.length} partos · {totV} vivos</span>
               {totM>0&&<span className="badge br">{totM} muertos</span>}
-              {role==="admin"&&<button className="btn btn-sm btn-p" onClick={()=>openNew("parto",{cerda_id:cerda?.id||"",fecha_parto:toISO(TODAY)})}>+ Parto</button>}
+              {PERMS.registrarPartos(role)&&<button className="btn btn-sm btn-p" onClick={()=>openNew("parto",{cerda_id:cerda?.id||"",fecha_parto:toISO(TODAY)})}>+ Parto</button>}
             </div>
           </div>
           <div className="tw"><table>
-            <thead><tr><th className="fecha-col">Fecha Parto</th><th>Vivos</th><th>Muertos</th><th>Total</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+            <thead><tr><th className="fecha-col">Fecha Parto</th><th>Vivos</th><th>Muertos</th><th>Total</th><th className="hide-mobile">Notas</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
             <tbody>{pts.map(p=><tr key={p.id}>
               <td className="fecha-col" style={{fontWeight:600}}>{fmtDisp(p.fecha_parto)}</td>
               <td style={{fontWeight:700,color:G.deep}}>{p.lechones_vivos}</td>
               <td style={{color:p.lechones_muertos>0?G.red:G.g500}}>{p.lechones_muertos}</td>
               <td style={{fontWeight:700}}>{p.lechones_vivos+p.lechones_muertos}</td>
               <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{p.notas||"-"}</td>
-              {role==="admin"&&<td style={{display:"flex",gap:4}}>
+              {PERMS.eliminar(role)&&<td style={{display:"flex",gap:4}}>
                 <button className="btn btn-sm btn-o" onClick={()=>openEdit("parto",p)}>✏</button>
                 <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("partos",p.id)}>✕</button>
               </td>}
@@ -2076,7 +2145,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
                     <div style={{fontSize:12,fontWeight:700,color:G.g700,marginBottom:4}}>{icon} {pr.procedimiento}</div>
                     <div style={{fontSize:11,color:G.g500}}>Estimado: {fmtDisp(pr.fecha_estimada)}</div>
                     {pr.fecha_real&&<div style={{fontSize:11,color:"#0F6E56",fontWeight:600}}>Real: {fmtDisp(pr.fecha_real)}</div>}
-                    {role==="admin"&&!esCompletado&&<button className="btn btn-sm" style={{marginTop:6,fontSize:10,padding:"2px 8px",background:G.deep,color:"#fff",border:"none"}}
+                    {PERMS.completarActCerdos(role)&&!esCompletado&&<button className="btn btn-sm" style={{marginTop:6,fontSize:10,padding:"2px 8px",background:G.deep,color:"#fff",border:"none"}}
                       onClick={async()=>{
                         const fechaReal=prompt(`Fecha real de ${pr.procedimiento} (YYYY-MM-DD):`,toISO(TODAY));
                         if(fechaReal){await supabase.from("protocolo_partos").update({fecha_real:fechaReal,estado:"completado"}).eq("id",pr.id);fetchPorcino(false);}
@@ -2102,11 +2171,11 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             <div className="fl gap2">
               {proxima&&<span className="badge bo">Próx: {proxima.proxima_dosis} ({diffD(TODAY,proxima.proxima_dosis)}d)</span>}
               {vencida&&<span className="badge br">⚠ Dosis vencida</span>}
-              {role==="admin"&&<button className="btn btn-sm btn-p" onClick={()=>openNew("vacuna",{cerda_id:cerda?.id||"",fecha:toISO(TODAY)})}>+ Vacuna</button>}
+              {PERMS.registrarVacunas(role)&&<button className="btn btn-sm btn-p" onClick={()=>openNew("vacuna",{cerda_id:cerda?.id||"",fecha:toISO(TODAY)})}>+ Vacuna</button>}
             </div>
           </div>
           <div className="tw"><table>
-            <thead><tr><th>Vacuna</th><th className="fecha-col">Fecha</th><th className="fecha-col">Próxima Dosis</th><th>Días</th><th className="hide-mobile">Veterinario</th>{role==="admin"&&<th></th>}</tr></thead>
+            <thead><tr><th>Vacuna</th><th className="fecha-col">Fecha</th><th className="fecha-col">Próxima Dosis</th><th>Días</th><th className="hide-mobile">Veterinario</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
             <tbody>{vacs.map(v=>{
               const dias=v.proxima_dosis?diffD(TODAY,v.proxima_dosis):null;
               return <tr key={v.id}>
@@ -2115,7 +2184,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
                 <td className="fecha-col" style={{color:dias!==null&&dias<7?G.red:G.g700,fontWeight:dias!==null&&dias<7?700:400}}>{fmtDisp(v.proxima_dosis)}</td>
                 <td>{dias!==null?<span style={{fontWeight:700,color:dias<0?G.g500:dias<7?G.red:dias<30?G.gold:G.deep}}>{dias<0?"Vencida":dias+"d"}</span>:"-"}</td>
                 <td className="hide-mobile" style={{fontSize:12}}>{v.veterinario||"-"}</td>
-                {role==="admin"&&<td style={{display:"flex",gap:4}}>
+                {PERMS.eliminar(role)&&<td style={{display:"flex",gap:4}}>
                   <button className="btn btn-sm btn-o" onClick={()=>openEdit("vacuna",v)}>✏</button>
                   <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("vacunas_cerdas",v.id)}>✕</button>
                 </td>}
@@ -2182,7 +2251,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         <div className="card">
         <div className="card-h"><h3>🤝 Ventas de Lechones</h3></div>
         <div className="tw"><table>
-          <thead><tr><th className="fecha-col">Fecha</th><th>Tipo</th><th>Estatus</th><th>Cant.</th><th>Total</th><th className="hide-mobile">Comprador</th><th className="hide-mobile">Pago</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th className="fecha-col">Fecha</th><th>Tipo</th><th>Estatus</th><th>Cant.</th>{PERMS.verMontos(role)&&<th>Total</th>}<th className="hide-mobile">Comprador</th><th className="hide-mobile">Pago</th><th className="hide-mobile">Notas</th>{PERMS.eliminar(role)&&<th></th>}</tr></thead>
           <tbody>{ventas.map(v=><tr key={v.id}>
             <td className="fecha-col">{fmtDisp(v.fecha)}</td>
             <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":v.tipo==="transferencia"?"bo":"bg"}`}>{v.tipo==="transferencia"?"Transfer":v.tipo||"Lechon"}</span></td>
@@ -2191,7 +2260,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             <td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
             <td className="hide-mobile">{v.comprador||"-"}</td><td className="hide-mobile"><span className="badge bk">{v.forma_pago||"-"}</span></td>
             <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{v.notas||"-"}</td>
-            {role==="admin"&&<td style={{display:"flex",gap:4}}>
+            {PERMS.eliminar(role)&&<td style={{display:"flex",gap:4}}>
               <button className="btn btn-sm btn-o" onClick={()=>openEdit("venta",v)}>✏</button>
               <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("ventas_lechones",v.id)}>✕</button>
             </td>}
@@ -2331,6 +2400,150 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
   </div>;
 }
 
+
+// ─── GESTIÓN DE USUARIOS (solo admin) ────────────────────────────────────────
+function UsuariosPage({toast,userId,userName}){
+  const [perfiles,setPerfiles]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(false);
+  const [form,setForm]=useState({});
+  const [saving,setSaving]=useState(false);
+
+  const fetch=async()=>{
+    setLoading(true);
+    const{data}=await supabase.from("perfiles").select("*").order("nombre");
+    setPerfiles(data||[]);
+    setLoading(false);
+  };
+  useEffect(()=>{fetch();},[]);
+
+  const saveRol=async(id,nuevoRol,nombrePerfil)=>{
+    const prev=perfiles.find(p=>p.id===id);
+    const{error}=await supabase.from("perfiles").update({rol:nuevoRol}).eq("id",id);
+    if(error){toast(error.message,"error");return;}
+    await logAudit({userId,userName,accion:"cambio_rol",tabla:"perfiles",registroId:id,datosPrev:{rol:prev?.rol},datosNuevos:{rol:nuevoRol}});
+    toast(`Rol de ${nombrePerfil} actualizado a ${ROLES_LABEL[nuevoRol]} ✓`);
+    fetch();
+  };
+
+  const saveNombre=async(id,nombre)=>{
+    const{error}=await supabase.from("perfiles").update({nombre}).eq("id",id);
+    if(error){toast(error.message,"error");return;}
+    toast("Nombre actualizado ✓");fetch();
+  };
+
+  const rolBadgeStyle=(r)=>({fontSize:11,padding:"2px 9px",borderRadius:20,fontWeight:700,background:r==="admin"?G.pale:r==="socio"?"#E1F5EE":r==="supervisor"?"#EEEDFE":G.goldL,color:ROLES_COLOR[r]||G.g500});
+
+  return <div>
+    <div className="sg mb4">
+      <div className="sc grn"><span className="si">👥</span><span className="sl">Total Usuarios</span><span className="sv">{perfiles.length}</span></div>
+      {Object.entries(ROLES_LABEL).map(([r,l])=><div key={r} className="sc"><span className="si">🔑</span><span className="sl">{l}</span><span className="sv" style={{color:ROLES_COLOR[r]}}>{perfiles.filter(p=>p.rol===r).length}</span></div>)}
+    </div>
+
+    <div className="card mb4">
+      <div className="card-h">
+        <h3>👥 Usuarios del Sistema</h3>
+        <div style={{fontSize:12,color:G.g500}}>Los usuarios se crean desde el Dashboard de Supabase → Authentication → Invite User</div>
+      </div>
+      {loading?<div className="card-b" style={{textAlign:"center",padding:30,color:G.g500}}>Cargando...</div>:
+      <div className="tw"><table>
+        <thead><tr><th>Nombre</th><th>Rol Actual</th><th>Cambiar Rol</th><th>ID</th></tr></thead>
+        <tbody>{perfiles.map(p=><tr key={p.id}>
+          <td style={{fontWeight:600}}>{p.nombre||"Sin nombre"}</td>
+          <td><span style={rolBadgeStyle(p.rol)}>{ROLES_LABEL[p.rol]||p.rol}</span></td>
+          <td>
+            <select value={p.rol||""} onChange={e=>saveRol(p.id,e.target.value,p.nombre)}
+              style={{padding:"4px 8px",border:`1.5px solid ${G.g300}`,borderRadius:6,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+              {Object.entries(ROLES_LABEL).map(([r,l])=><option key={r} value={r}>{l}</option>)}
+            </select>
+          </td>
+          <td style={{fontSize:11,color:G.g500,fontFamily:"monospace"}}>{p.id?.substring(0,16)}...</td>
+        </tr>)}</tbody>
+      </table></div>}
+    </div>
+
+    <div className="card">
+      <div className="card-h"><h3>📋 Permisos por Rol</h3></div>
+      <div className="card-b">
+        <div className="tw"><table style={{fontSize:12}}>
+          <thead><tr><th>Permiso</th><th style={{textAlign:"center"}}>Admin</th><th style={{textAlign:"center"}}>Socio</th><th style={{textAlign:"center"}}>Supervisor</th><th style={{textAlign:"center"}}>Operativo</th></tr></thead>
+          <tbody>
+            {[
+              ["Ver Dashboard / Finanzas / Reportes","✅","✅","❌","❌"],
+              ["Ver montos y totales ($)","✅","✅","❌","❌"],
+              ["Registrar gastos","✅","✅","✅","❌"],
+              ["Registrar ingresos / Deudas","✅","✅","❌","❌"],
+              ["Ver módulo Porcino y Ñame","✅","✅","✅","✅"],
+              ["Registrar montas / partos / vacunas","✅","✅","✅","❌"],
+              ["Completar actividades","✅","✅","✅","✅"],
+              ["Editar / eliminar registros","✅","✅","❌","❌"],
+              ["Gestión de usuarios","✅","❌","❌","❌"],
+              ["Ver auditoría","✅","✅","❌","❌"],
+            ].map(([perm,...vals])=><tr key={perm}>
+              <td style={{fontWeight:500}}>{perm}</td>
+              {vals.map((v,i)=><td key={i} style={{textAlign:"center",fontSize:14}}>{v}</td>)}
+            </tr>)}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── AUDITORÍA (admin + socio) ────────────────────────────────────────────────
+function AuditoriaPage({toast}){
+  const [logs,setLogs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [filtro,setFiltro]=useState("todos");
+
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      const{data}=await supabase.from("auditoria").select("*").order("created_at",{ascending:false}).limit(200);
+      setLogs(data||[]);
+      setLoading(false);
+    })();
+  },[]);
+
+  const ACCION_LABEL={
+    insertar:"➕ Registro",cambio_rol:"🔑 Cambio rol",actualizar:"✏️ Edición",
+    completar_actividad:"✓ Actividad",registrar_gasto:"💸 Gasto",eliminar:"🗑️ Eliminación"
+  };
+  const fmtDT=d=>d?new Date(d).toLocaleString("es-PA",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"-";
+  const tablas=[...new Set(logs.map(l=>l.tabla))];
+  const filtrados=filtro==="todos"?logs:logs.filter(l=>l.tabla===filtro);
+
+  return <div>
+    <div className="card mb4">
+      <div className="card-h">
+        <h3>📋 Registro de Auditoría</h3>
+        <div className="fl gap2">
+          <select value={filtro} onChange={e=>setFiltro(e.target.value)}
+            style={{padding:"5px 10px",border:`1.5px solid ${G.g300}`,borderRadius:6,fontSize:12}}>
+            <option value="todos">Todas las tablas</option>
+            {tablas.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+          <span style={{fontSize:12,color:G.g500}}>{filtrados.length} registros</span>
+        </div>
+      </div>
+      {loading?<div className="card-b" style={{textAlign:"center",padding:30,color:G.g500}}>Cargando...</div>:
+      <div className="tw"><table style={{fontSize:12}}>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Tabla</th><th>Detalle</th></tr></thead>
+        <tbody>{filtrados.length===0?<tr><td colSpan={5} style={{textAlign:"center",padding:20,color:G.g500}}>Sin registros</td></tr>:
+          filtrados.map((l,i)=><tr key={i}>
+            <td className="fecha-col">{fmtDT(l.created_at)}</td>
+            <td style={{fontWeight:600}}>{l.user_nombre||"Sistema"}</td>
+            <td><span className="badge bo">{ACCION_LABEL[l.accion]||l.accion}</span></td>
+            <td style={{fontFamily:"monospace",fontSize:11}}>{l.tabla}</td>
+            <td style={{fontSize:11,color:G.g500,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {l.datos_nuevos?JSON.stringify(JSON.parse(l.datos_nuevos)).substring(0,80):"—"}
+            </td>
+          </tr>)}
+        </tbody>
+      </table></div>}
+    </div>
+  </div>;
+}
 
 // ─── ALERTAS PANEL (mini, para Dashboard) ─────────────────────────────────────
 function AlertasPanel({alertas,onVerTodas}){
@@ -2535,7 +2748,7 @@ export default function App(){
 
   const logout=async()=>{await supabase.auth.signOut();setUser(null);};
 
-  const nav=[
+  const navAll=[
     {id:"dashboard",label:"Dashboard",icon:"◼",group:"Principal"},
     {id:"alertas",label:"Alertas",icon:"🔔",group:"Principal"},
     {id:"cerdos_m",label:"Producción Porcina",icon:"🐷",group:"Producción"},
@@ -2544,12 +2757,32 @@ export default function App(){
     {id:"deudas",label:"Deudas",icon:"📋",group:"Gestión"},
     {id:"inventario",label:"Inventario",icon:"📦",group:"Gestión"},
     {id:"reportes",label:"Reportes",icon:"📊",group:"Análisis"},
+    {id:"usuarios",label:"Usuarios",icon:"👥",group:"Administración"},
+    {id:"auditoria",label:"Auditoría",icon:"📋",group:"Administración"},
   ];
+  // Filtrar nav según rol
+  const navPermMap={
+    dashboard:PERMS.verDashboard,alertas:()=>true,
+    cerdos_m:PERMS.verCerdos,name_m:PERMS.verName,
+    finanzas:PERMS.verFinanzas,deudas:PERMS.verDeudas,
+    inventario:PERMS.verInventario,reportes:PERMS.verReportes,
+    usuarios:PERMS.verUsuarios,auditoria:PERMS.verAuditoria,
+  };
+  const nav=navAll.filter(n=>!navPermMap[n.id]||navPermMap[n.id](role));
   const groups=[...new Set(nav.map(n=>n.group))];
-  const titles={dashboard:"Dashboard General",alertas:"Alertas del Sistema",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes & Análisis"};
+  const titles={dashboard:"Dashboard General",alertas:"Alertas del Sistema",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes & Análisis",usuarios:"Gestión de Usuarios",auditoria:"Auditoría del Sistema"};
   const role=user?.perfil?.rol||"encargado";
   const nombre=user?.perfil?.nombre||user?.email||"Usuario";
   const initials=nombre.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
+
+  // Redirigir si el rol no tiene acceso a la página actual
+  useEffect(()=>{
+    if(!navPermMap)return;
+    const perm=navPermMap[page];
+    if(perm&&!perm(role)){
+      setPage(PERMS.verCerdos(role)?"cerdos_m":"alertas");
+    }
+  },[role,page]);
 
   const alertas=calcAlertas({cerdas,partos,montas,vacunas,ventas,deudas,inventario,siembras,actividadesName});
   const alertasCriticas=alertas.filter(a=>a.tipo==="critica").length;
@@ -2589,8 +2822,8 @@ export default function App(){
             <h2 style={{fontSize:mobile?"15px":"20px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:mobile?"150px":"none"}}>{titles[page]}</h2>
           </div>
           <div className="fl gap2" style={{alignItems:"center"}}>
-            {!mobile&&<div style={{fontSize:12,color:G.g500}}>{dashAnio==="todo"?"Total":"Balance "+dashAnio}: <span style={{fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</span></div>}
-            {mobile&&<div style={{fontSize:12,fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</div>}
+            {!mobile&&PERMS.verMontos(role)&&<div style={{fontSize:12,color:G.g500}}>{dashAnio==="todo"?"Total":"Balance "+dashAnio}: <span style={{fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</span></div>}
+            {mobile&&PERMS.verMontos(role)&&<div style={{fontSize:12,fontWeight:700,color:totI2026-totG2026>=0?G.deep:G.red}}>{fmt$(totI2026-totG2026)}</div>}
             {alertas.length>0&&<button className="btn btn-sm" style={{position:"relative",background:alertasCriticas>0?G.red:G.gold,color:"#fff",border:"none",padding:"5px 10px"}} onClick={()=>setPage("alertas")}>
               🔔 {alertas.length}
             </button>}
@@ -2602,14 +2835,23 @@ export default function App(){
           {!isConfigured&&<ConfigBanner/>}
           {loading&&<Loading/>}
           {!loading&&<>
-            {page==="dashboard"&&<><AlertasPanel alertas={alertas} onVerTodas={()=>setPage("alertas")}/><Dashboard gastos={gastos} ingresos={ingresos} onAnioChange={setDashAnio}/></>}
+            {page==="dashboard"&&PERMS.verDashboard(role)&&<><AlertasPanel alertas={alertas} onVerTodas={()=>setPage("alertas")}/><Dashboard gastos={gastos} ingresos={ingresos} onAnioChange={setDashAnio}/></>}
             {page==="alertas"&&<AlertasPage alertas={alertas} onNavegar={setPage}/>}
-            {page==="finanzas"&&<Finanzas gastos={gastos} ingresos={ingresos} onRefresh={fetchAll} role={role} toast={showToast}/>}
-            {page==="deudas"&&<Deudas deudas={deudas} onRefresh={fetchAll} role={role} toast={showToast}/>}
-            {page==="inventario"&&<Inventario inventario={inventario} onRefresh={fetchAll} role={role} toast={showToast}/>}
-            {page==="reportes"&&<Reportes gastos={gastos} ingresos={ingresos}/>}
-            {page==="cerdos_m"&&<CerdosModule role={role} toast={showToast}/>}
-            {page==="name_m"&&<NameModule role={role} toast={showToast} gastos={gastos} ingresos={ingresos}/>}
+            {page==="finanzas"&&PERMS.verFinanzas(role)&&<Finanzas gastos={gastos} ingresos={ingresos} onRefresh={fetchAll} role={role} toast={showToast} userId={user?.id} userName={nombre}/>}
+            {page==="deudas"&&PERMS.verDeudas(role)&&<Deudas deudas={deudas} onRefresh={fetchAll} role={role} toast={showToast}/>}
+            {page==="inventario"&&PERMS.verInventario(role)&&<Inventario inventario={inventario} onRefresh={fetchAll} role={role} toast={showToast}/>}
+            {page==="reportes"&&PERMS.verReportes(role)&&<Reportes gastos={gastos} ingresos={ingresos}/>}
+            {page==="cerdos_m"&&<CerdosModule role={role} toast={showToast} userId={user?.id} userName={nombre}/>}
+            {page==="name_m"&&<NameModule role={role} toast={showToast} gastos={gastos} ingresos={ingresos} userId={user?.id} userName={nombre}/>}
+            {page==="usuarios"&&PERMS.verUsuarios(role)&&<UsuariosPage toast={showToast} userId={user?.id} userName={nombre}/>}
+            {page==="auditoria"&&PERMS.verAuditoria(role)&&<AuditoriaPage toast={showToast}/>}
+            {/* Acceso denegado */}
+            {!["dashboard","alertas","finanzas","deudas","inventario","reportes","cerdos_m","name_m","usuarios","auditoria"].includes(page)&&
+              <div style={{textAlign:"center",padding:"60px 20px"}}>
+                <div style={{fontSize:48,marginBottom:12}}>🔒</div>
+                <div style={{fontSize:18,fontWeight:700,color:G.g700}}>Sin acceso</div>
+                <div style={{color:G.g500,marginTop:8}}>Tu rol no tiene permisos para esta sección</div>
+              </div>}
           </>}
         </main>
 
