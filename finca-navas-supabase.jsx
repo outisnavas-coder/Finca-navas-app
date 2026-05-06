@@ -2748,6 +2748,10 @@ export default function App(){
 
   const logout=async()=>{await supabase.auth.signOut();setUser(null);};
 
+  const role=user?.perfil?.rol||"encargado";
+  const nombre=user?.perfil?.nombre||user?.email||"Usuario";
+  const initials=nombre.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
+
   const navAll=[
     {id:"dashboard",label:"Dashboard",icon:"◼",group:"Principal"},
     {id:"alertas",label:"Alertas",icon:"🔔",group:"Principal"},
@@ -2760,7 +2764,6 @@ export default function App(){
     {id:"usuarios",label:"Usuarios",icon:"👥",group:"Administración"},
     {id:"auditoria",label:"Auditoría",icon:"📋",group:"Administración"},
   ];
-  // Filtrar nav según rol
   const navPermMap={
     dashboard:PERMS.verDashboard,alertas:()=>true,
     cerdos_m:PERMS.verCerdos,name_m:PERMS.verName,
@@ -2771,9 +2774,6 @@ export default function App(){
   const nav=navAll.filter(n=>!navPermMap[n.id]||navPermMap[n.id](role));
   const groups=[...new Set(nav.map(n=>n.group))];
   const titles={dashboard:"Dashboard General",alertas:"Alertas del Sistema",cerdos_m:"Producción Porcina",name_m:"Producción de Ñame",finanzas:"Finanzas",deudas:"Deudas & Cuentas",inventario:"Inventario",reportes:"Reportes & Análisis",usuarios:"Gestión de Usuarios",auditoria:"Auditoría del Sistema"};
-  const role=user?.perfil?.rol||"encargado";
-  const nombre=user?.perfil?.nombre||user?.email||"Usuario";
-  const initials=nombre.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
 
   // Redirigir si el rol no tiene acceso a la página actual
   useEffect(()=>{
