@@ -1710,7 +1710,8 @@ function CerdosModule({role,toast,userId,userName}){
     const lastMonta=cMontas[0];
 
     // Si hay monta posterior al último parto → está en gestación
-    const montaPostParto=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
+    const montaPostParto=lastMonta&&(!lastParto||
+      new Date(lastMonta.fecha_monta+"T12:00:00")>new Date(lastParto.fecha_parto+"T12:00:00"));
     if(montaPostParto){
       const proxParto=addD(lastMonta.fecha_monta,GEST);
       const dm=diffD(TODAY,proxParto);
