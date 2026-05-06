@@ -2570,11 +2570,12 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
               const datosInsert={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas,tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
               setSaving(true);
               try{
-                const{error}=await supabase.from("ventas_lechones").insert(datosInsert);
+                // Generar UUID client-side para poder linkear inmediatamente
+                const newId=crypto.randomUUID();
+                const{error}=await supabase.from("ventas_lechones").insert({id:newId,...datosInsert});
                 if(error){toast(error.message,"error");return;}
-                const{data:nv}=await supabase.from("ventas_lechones").select("id").eq("fecha",datosInsert.fecha).order("created_at",{ascending:false}).limit(1).single();
-                await syncIngreso({...datosInsert,total},nv?.id,"insertar");
-                await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:nv?.id,datosNuevos:datosInsert});
+                await syncIngreso({...datosInsert,total},newId,"insertar");
+                await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:newId,datosNuevos:datosInsert});
                 toast("Venta guardada ✓");
                 await fetchPorcino(false);
                 if(onRefreshAll)onRefreshAll();
