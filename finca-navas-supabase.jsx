@@ -2405,9 +2405,9 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
 function UsuariosPage({toast,userId,userName}){
   const [perfiles,setPerfiles]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [modal,setModal]=useState(false);
-  const [form,setForm]=useState({});
   const [saving,setSaving]=useState(false);
+  const [editNombre,setEditNombre]=useState(null); // id del perfil editando nombre
+  const [tmpNombre,setTmpNombre]=useState("");
 
   const fetch=async()=>{
     setLoading(true);
@@ -2426,10 +2426,15 @@ function UsuariosPage({toast,userId,userName}){
     fetch();
   };
 
-  const saveNombre=async(id,nombre)=>{
-    const{error}=await supabase.from("perfiles").update({nombre}).eq("id",id);
+  const saveNombre=async(id)=>{
+    if(!tmpNombre.trim()){toast("El nombre no puede estar vacío","error");return;}
+    setSaving(true);
+    const{error}=await supabase.from("perfiles").update({nombre:tmpNombre.trim()}).eq("id",id);
+    setSaving(false);
     if(error){toast(error.message,"error");return;}
-    toast("Nombre actualizado ✓");fetch();
+    toast("Nombre actualizado ✓");
+    setEditNombre(null);
+    fetch();
   };
 
   const rolBadgeStyle=(r)=>({fontSize:11,padding:"2px 9px",borderRadius:20,fontWeight:700,background:r==="admin"?G.pale:r==="socio"?"#E1F5EE":r==="supervisor"?"#EEEDFE":G.goldL,color:ROLES_COLOR[r]||G.g500});
@@ -2443,13 +2448,28 @@ function UsuariosPage({toast,userId,userName}){
     <div className="card mb4">
       <div className="card-h">
         <h3>👥 Usuarios del Sistema</h3>
-        <div style={{fontSize:12,color:G.g500}}>Los usuarios se crean desde el Dashboard de Supabase → Authentication → Invite User</div>
+        <div style={{fontSize:12,color:G.g500}}>Usuarios se crean desde Supabase → Authentication → Invite User</div>
       </div>
       {loading?<div className="card-b" style={{textAlign:"center",padding:30,color:G.g500}}>Cargando...</div>:
       <div className="tw"><table>
         <thead><tr><th>Nombre</th><th>Rol Actual</th><th>Cambiar Rol</th><th>ID</th></tr></thead>
         <tbody>{perfiles.map(p=><tr key={p.id}>
-          <td style={{fontWeight:600}}>{p.nombre||"Sin nombre"}</td>
+          <td>
+            {editNombre===p.id
+              ?<div className="fl gap2" style={{alignItems:"center"}}>
+                  <input autoFocus value={tmpNombre} onChange={e=>setTmpNombre(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter")saveNombre(p.id);if(e.key==="Escape")setEditNombre(null);}}
+                    style={{padding:"4px 8px",border:`1.5px solid ${G.mid}`,borderRadius:6,fontSize:13,width:140,fontFamily:"'DM Sans',sans-serif"}}/>
+                  <button className="btn btn-p btn-sm" disabled={saving} onClick={()=>saveNombre(p.id)}>✓</button>
+                  <button className="btn btn-o btn-sm" onClick={()=>setEditNombre(null)}>✕</button>
+                </div>
+              :<div className="fl gap2" style={{alignItems:"center"}}>
+                  <span style={{fontWeight:600}}>{p.nombre||"Sin nombre"}</span>
+                  <button className="btn btn-o btn-sm" style={{fontSize:10,padding:"2px 6px"}}
+                    onClick={()=>{setEditNombre(p.id);setTmpNombre(p.nombre||"");}}>✏</button>
+                </div>
+            }
+          </td>
           <td><span style={rolBadgeStyle(p.rol)}>{ROLES_LABEL[p.rol]||p.rol}</span></td>
           <td>
             <select value={p.rol||""} onChange={e=>saveRol(p.id,e.target.value,p.nombre)}
