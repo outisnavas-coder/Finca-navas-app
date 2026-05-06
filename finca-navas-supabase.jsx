@@ -1572,7 +1572,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
 }
 
 // ─── MÓDULO PRODUCCIÓN PORCINA ────────────────────────────────────────────────
-function CerdosModule({role,toast,userId,userName}){
+function CerdosModule({role,toast,userId,userName,onRefreshAll}){
   const [tab,setTab]=useState("timeline");
   const [cerdas,setCerdas]=useState([]);
   const [partos,setPartos]=useState([]);
@@ -1697,6 +1697,7 @@ function CerdosModule({role,toast,userId,userName}){
         await logAudit({userId,userName,accion:"eliminar",tabla,registroId:id});
         toast("Eliminado ✓");
         await fetchPorcino(false);
+        if(onRefreshAll)onRefreshAll();
       }
     }catch(e){toast(e.message,"error");}
   };
@@ -2576,6 +2577,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
                 await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:nv?.id,datosNuevos:datosInsert});
                 toast("Venta guardada ✓");
                 await fetchPorcino(false);
+                if(onRefreshAll)onRefreshAll();
                 setModal(null);setForm({});
               }catch(e){toast(e.message,"error");}
               finally{setSaving(false);}
@@ -3080,7 +3082,7 @@ export default function App(){
             {page==="deudas"&&PERMS.verDeudas(role)&&<Deudas deudas={deudas} onRefresh={fetchAll} role={role} toast={showToast}/>}
             {page==="inventario"&&PERMS.verInventario(role)&&<Inventario inventario={inventario} onRefresh={fetchAll} role={role} toast={showToast}/>}
             {page==="reportes"&&PERMS.verReportes(role)&&<Reportes gastos={gastos} ingresos={ingresos}/>}
-            {page==="cerdos_m"&&<CerdosModule role={role} toast={showToast} userId={user?.id} userName={nombre}/>}
+            {page==="cerdos_m"&&<CerdosModule role={role} toast={showToast} userId={user?.id} userName={nombre} onRefreshAll={fetchAll}/>}
             {page==="name_m"&&<NameModule role={role} toast={showToast} gastos={gastos} ingresos={ingresos} userId={user?.id} userName={nombre}/>}
             {page==="usuarios"&&PERMS.verUsuarios(role)&&<UsuariosPage toast={showToast} userId={user?.id} userName={nombre}/>}
             {page==="auditoria"&&PERMS.verAuditoria(role)&&<AuditoriaPage toast={showToast}/>}
