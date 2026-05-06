@@ -263,33 +263,48 @@ function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=
     }
   }
 
-  // ── 7. SIEMBRAS ACTIVAS — COSECHA PRÓXIMA ────────────────────────────────
+  // ── 7. SIEMBRAS ACTIVAS — COSECHA PRÓXIMA / VENCIDA ─────────────────────
   siembras.filter(s=>s.estado==="activa").forEach(s=>{
     const actsS=actividadesName.filter(a=>a.siembra_id===s.id);
-    const actCosecha=actsS.find(a=>a.actividad==="Cosecha"||a.actividad?.toLowerCase().includes("cosecha"));
-    const fechaCosecha=actCosecha?.fecha_estimada;
-    if(fechaCosecha){
-      const dias=diffD(TODAY,fechaCosecha);
+    const totalActs=actsS.length;
+    const completadasActs=actsS.filter(a=>a.estado==="completado").length;
+    // Si todas las actividades están completadas, esta siembra no genera alertas
+    if(totalActs>0&&completadasActs===totalActs)return;
+
+    const actCosecha=actsS.find(a=>
+      a.actividad==="Cosecha"||a.actividad?.toLowerCase().includes("cosecha")
+    );
+    // Solo alertar cosecha si sigue PENDIENTE (no completada)
+    if(actCosecha&&actCosecha.estado!=="completado"&&actCosecha.fecha_estimada){
+      const dias=diffD(TODAY,actCosecha.fecha_estimada);
       if(dias>=0&&dias<=21){
-        alertas.push({id:`cosecha-${s.id}`,tipo:dias<=7?"critica":"advertencia",icono:"🌿",titulo:`Cosecha próxima — ${s.nombre}`,sub:`Estimada el ${new Date(fechaCosecha+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short"})} · En ${dias}d · ${s.hectareas} ha`,modulo:"name_m",orden:dias<=7?1:2});
-      } else if(dias<0&&!actCosecha?.fecha_real){
-        alertas.push({id:`cosecha-venc-${s.id}`,tipo:"critica",icono:"🌿",titulo:`Cosecha VENCIDA — ${s.nombre}`,sub:`Estimada hace ${Math.abs(dias)}d · Sin registrar producción real · ${s.hectareas} ha`,modulo:"name_m",orden:1});
+        alertas.push({id:`cosecha-${s.id}`,tipo:dias<=7?"critica":"advertencia",icono:"🌿",titulo:`Cosecha próxima — ${s.nombre}`,sub:`Estimada el ${new Date(actCosecha.fecha_estimada+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short"})} · En ${dias}d · ${s.hectareas} ha`,modulo:"name_m",orden:dias<=7?1:2});
+      } else if(dias<0){
+        alertas.push({id:`cosecha-venc-${s.id}`,tipo:"critica",icono:"🌿",titulo:`Cosecha VENCIDA — ${s.nombre}`,sub:`Estimada hace ${Math.abs(dias)}d · Actividad pendiente sin completar · ${s.hectareas} ha`,modulo:"name_m",orden:1});
       }
     }
-    // ── 8. ACTIVIDADES DE ÑAME VENCIDAS ──────────────────────────────────
-    const actsVencidas=actsS.filter(a=>a.estado==="pendiente"&&a.fecha_estimada&&diffD(TODAY,a.fecha_estimada)<0);
+
+    // ── 8. ACTIVIDADES DE ÑAME VENCIDAS (pendientes con fecha pasada) ─────
+    const actsVencidas=actsS.filter(a=>
+      a.estado==="pendiente"&&a.fecha_estimada&&diffD(TODAY,a.fecha_estimada)<0
+    );
     if(actsVencidas.length>0){
       alertas.push({id:`acts-venc-${s.id}`,tipo:"advertencia",icono:"📋",titulo:`${actsVencidas.length} actividad${actsVencidas.length>1?"es":""} vencida${actsVencidas.length>1?"s":""} — ${s.nombre}`,sub:actsVencidas.slice(0,2).map(a=>`${a.actividad} (D${a.dias_estimado})`).join(", ")+(actsVencidas.length>2?` y ${actsVencidas.length-2} más`:""),modulo:"name_m",orden:3});
     }
-    // ── 9. ACTIVIDADES PRÓXIMAS (≤7 días) ────────────────────────────────
-    const actsProximas=actsS.filter(a=>a.estado==="pendiente"&&a.fecha_estimada&&diffD(TODAY,a.fecha_estimada)>=0&&diffD(TODAY,a.fecha_estimada)<=7);
+
+    // ── 9. ACTIVIDADES PRÓXIMAS PENDIENTES (≤7 días) ──────────────────────
+    const actsProximas=actsS.filter(a=>
+      a.estado==="pendiente"&&a.fecha_estimada&&
+      diffD(TODAY,a.fecha_estimada)>=0&&diffD(TODAY,a.fecha_estimada)<=7
+    );
     actsProximas.forEach(a=>{
       const dias=diffD(TODAY,a.fecha_estimada);
       alertas.push({id:`act-prox-${a.id}`,tipo:"info",icono:"🗓️",titulo:`Actividad próxima — ${s.nombre}`,sub:`${a.actividad} · En ${dias}d (${new Date(a.fecha_estimada+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short"})}) · Día ${a.dias_estimado} del ciclo`,modulo:"name_m",orden:4});
     });
-    // ── 10. SIEMBRA SIN PRODUCCIÓN REAL REGISTRADA (>230 días) ───────────
+
+    // ── 10. PRODUCCIÓN REAL NO REGISTRADA (>230 días desde siembra) ───────
     const diasSiembra=diffD(s.fecha_siembra,TODAY);
-    if(diasSiembra>230&&!s.produccion_real_qq){
+    if(diasSiembra>230&&!s.produccion_real_qq&&completadasActs<totalActs){
       alertas.push({id:`prod-falta-${s.id}`,tipo:"advertencia",icono:"📊",titulo:`Producción no registrada — ${s.nombre}`,sub:`Lleva ${diasSiembra} días desde siembra · Registrar quintales cosechados`,modulo:"name_m",orden:3});
     }
   });
