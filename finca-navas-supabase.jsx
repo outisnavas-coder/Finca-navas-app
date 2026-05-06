@@ -1705,44 +1705,72 @@ function CerdosModule({role,toast,userId,userName}){
   vacunas.forEach(v=>{const n=getCerdaNombre(v.cerda_id);if(!vacunasByCerda[n])vacunasByCerda[n]=[];vacunasByCerda[n].push(v);});
 
   const estadoBadge=(e)=>e==="Activa"?"bg":e==="Muerta"?"br":e==="Vendida"?"bo":"bk";
-  // Normaliza cualquier formato de fecha a YYYY-MM-DD string
-  const toDate=(d)=>{
+
+  // ─── FUNCIÓN UNIFICADA DE ESTADO DE CERDA ────────────────────────────────
+  // Una sola función usada en Inventario, Timeline Estado Actual, y Timeline Histórico
+  const normDate=(d)=>{
     if(!d)return null;
-    if(typeof d==="string"){
-      if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;
-      return d.substring(0,10);
-    }
+    if(typeof d==="string")return d.substring(0,10);
     if(d instanceof Date)return d.toISOString().substring(0,10);
     return null;
   };
-  const toDateMs=(d)=>{const s=toDate(d);return s?new Date(s+"T12:00:00").getTime():0;};
+  const normMs=(d)=>{const s=normDate(d);return s?new Date(s+"T12:00:00").getTime():0;};
+  const diasDesde=(fecha)=>Math.floor((TODAY.getTime()-normMs(fecha))/(1000*60*60*24));
 
-  // Mapa de estado de producción — función simple, se recalcula en cada render
-  const estadoProduccion=(cerda)=>{
-    if(cerda.estado!=="Activa")return{label:cerda.estado,color:G.g500,bg:G.g100};
-    const cPartos=partos.filter(p=>p.cerda_id===cerda.id)
-      .sort((a,b)=>toDateMs(b.fecha_parto)-toDateMs(a.fecha_parto));
-    const cMontas=montas.filter(m=>m.cerda_id===cerda.id)
-      .sort((a,b)=>toDateMs(b.fecha_monta)-toDateMs(a.fecha_monta));
+  const calcEstadoCerda=(cerda)=>{
+    if(cerda.estado!=="Activa")return{label:cerda.estado,color:G.g500,bg:G.g100,pct:0,detalle:"",barColor:G.g300,esProyectado:false};
+    const cPartos=partos.filter(p=>p.cerda_id===cerda.id).sort((a,b)=>normMs(b.fecha_parto)-normMs(a.fecha_parto));
+    const cMontas=montas.filter(m=>m.cerda_id===cerda.id).sort((a,b)=>normMs(b.fecha_monta)-normMs(a.fecha_monta));
     const lastParto=cPartos[0];
     const lastMonta=cMontas[0];
-    const montaActiva=lastMonta&&(!lastParto||
-      toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
+
+    // Si hay monta posterior al parto (o solo monta sin parto) → gestación
+    const montaActiva=lastMonta&&(!lastParto||normMs(lastMonta.fecha_monta)>normMs(lastParto.fecha_parto));
+
     if(montaActiva){
-      const fm=toDate(lastMonta.fecha_monta);
-      const proxParto=addD(fm,GEST);
-      // Calcular días desde la monta directamente (no desde proxParto)
-      const diasGest=Math.floor((TODAY.getTime()-toDateMs(fm))/(1000*60*60*24));
-      if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
-      if(diasGest>GEST)return{label:"Parto pendiente",color:G.red,bg:G.redL};
+      const dg=diasDesde(lastMonta.fecha_monta);
+      const proxParto=normDate(addD(normDate(lastMonta.fecha_monta),GEST));
+      const fmtFecha=d=>d?new Date(d+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"}):"-";
+      if(dg>=0&&dg<=GEST)return{label:`Gestación D${dg}`,color:"#185FA5",bg:"#E6F1FB",pct:(dg/GEST)*100,barColor:"#FAC775",esProyectado:false,
+        detalle:`Monta ${fmtFecha(normDate(lastMonta.fecha_monta))} · Parto est. ${fmtFecha(proxParto)}`};
+      if(dg>GEST)return{label:"Parto pendiente",color:G.red,bg:G.redL,pct:100,barColor:G.red,esProyectado:false,
+        detalle:`Monta ${fmtFecha(normDate(lastMonta.fecha_monta))} · Parto est. vencido ${fmtFecha(proxParto)}`};
     }
+
     if(lastParto){
-      const fp=toDate(lastParto.fecha_parto);
-      const dp=diffD(fp,TODAY);
-      if(dp>=0&&dp<LACT)return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};
-      if(dp>=LACT&&dp<LACT+DESC)return{label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};
+      const fmtFecha=d=>d?new Date((typeof d==="string"?d+"T12:00:00":d)).toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"}):"-";
+      const protoUltParto=protocolo.filter(x=>x.parto_id===lastParto.id);
+      const desteteProto=protoUltParto.find(x=>x.procedimiento==="Destete");
+      const fechaDestete=desteteProto?.fecha_real||desteteProto?.fecha_estimada||null;
+      const destete=fechaDestete?new Date(normMs(fechaDestete)):addD(normDate(lastParto.fecha_parto),LACT);
+      const descFin=addD(destete,DESC);
+      const dp=diasDesde(lastParto.fecha_parto);
+      const dd=Math.floor((TODAY.getTime()-destete.getTime())/(1000*60*60*24));
+      const LACT_REAL=Math.ceil((destete.getTime()-normMs(lastParto.fecha_parto))/(1000*60*60*24));
+
+      if(TODAY<destete){
+        return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE",pct:(dp/LACT_REAL)*100,barColor:"#5DCAA5",esProyectado:false,
+          detalle:`Parió ${fmtFecha(lastParto.fecha_parto)} · ${lastParto.lechones_vivos} lechones · Destete ${desteteProto?.fecha_real?"real":"est."} ${fmtFecha(destete)}`};
+      }
+      if(dd>=0&&TODAY<descFin){
+        const proxMonta=addD(descFin,0);
+        return{label:`Descanso D${dd}`,color:"#7B6FC4",bg:"#EEF0FF",pct:(dd/DESC)*100,barColor:"#AFA9EC",esProyectado:false,
+          detalle:`Descanso/celo · Destete ${fmtFecha(destete)} · Próx. monta est. ${fmtFecha(proxMonta)}`};
+      }
+      // Descanso terminó, gestación proyectada
+      const proxMonta=new Date(Math.max(descFin.getTime(),TODAY.getTime()));
+      const proxParto=addD(proxMonta,GEST);
+      const dg=Math.floor((TODAY.getTime()-proxMonta.getTime())/(1000*60*60*24));
+      return{label:`Gestación D${dg}`,color:"#3BA57A",bg:G.pale,pct:Math.min((dg/GEST)*100,100),barColor:"#9FE1CB",esProyectado:true,
+        detalle:`Gestación estimada · Parto proyectado ${fmtFecha(proxParto)}`};
     }
-    return{label:"Activa",color:G.deep,bg:G.pale};
+
+    return{label:"Sin datos",color:G.g300,bg:G.g100,pct:0,barColor:G.g300,esProyectado:false,detalle:""};
+  };
+
+  const estadoProduccion=(cerda)=>{
+    const r=calcEstadoCerda(cerda);
+    return{label:r.label,color:r.color,bg:r.bg};
   };
 
   const buildTimelineData=()=>{
@@ -1922,58 +1950,12 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       const tDate=(d)=>{if(!d)return null;if(typeof d==="string"){if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;return d.substring(0,10);}if(d instanceof Date)return d.toISOString().substring(0,10);return null;};
       const tDateMs=(d)=>{const s=tDate(d);return s?new Date(s+"T12:00:00").getTime():0;};
 
-      // ── SECCIÓN 1: ESTADO ACTUAL ──
+      // ── SECCIÓN 1: ESTADO ACTUAL — usa calcEstadoCerda unificado ──
       const estadoActual=cerdas.filter(c=>c.estado==="Activa"&&c.tipo==="Madre").map(c=>{
-        const cPartos=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>tDateMs(b.fecha_parto)-tDateMs(a.fecha_parto));
-        const cMontas=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>tDateMs(b.fecha_monta)-tDateMs(a.fecha_monta));
-        const lastParto=cPartos[0];
-        const lastMonta=cMontas[0];
-        let estado="Sin datos",color=G.g300,bg=G.g100,pct=0,detalle="";
-        let barColor=G.g300,esProyectado=false;
-
-        const montaPostParto=lastMonta&&(!lastParto||
-          tDateMs(lastMonta.fecha_monta)>tDateMs(lastParto.fecha_parto));
-
-        if(montaPostParto){
-          const proxParto=addDays(tDate(lastMonta.fecha_monta),GEST);
-          const diasGest=Math.floor((TODAY.getTime()-tDateMs(lastMonta.fecha_monta))/MS_DAY);
-          if(diasGest>=0&&diasGest<=GEST){
-            estado=`Gestación D${diasGest}`;color="#185FA5";bg="#E6F1FB";
-            pct=(diasGest/GEST)*100;barColor="#FAC775";
-            detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. ${fmtLabel(proxParto)}`;
-          } else if(diasGest>GEST){
-            estado="Parto pendiente";color=G.red;bg=G.redL;
-            pct=100;barColor=G.red;
-            detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. vencido ${fmtLabel(proxParto)}`;
-          }
-        } else if(lastParto){
-          const protoUltParto=protocolo.filter(x=>x.parto_id===lastParto.id);
-          const desteteProto=protoUltParto.find(x=>x.procedimiento==="Destete");
-          const fechaDestete=desteteProto?.fecha_real||desteteProto?.fecha_estimada||null;
-          const destete=fechaDestete?new Date(tDateMs(fechaDestete)):addDays(tDate(lastParto.fecha_parto),LACT);
-          const descFin=addDays(destete,DESC);
-          const proxMonta=new Date(Math.max(descFin.getTime(),TODAY.getTime()));
-          const proxParto=addDays(proxMonta,GEST);
-          const diasDesdeParto=Math.ceil((TODAY.getTime()-tDateMs(lastParto.fecha_parto))/MS_DAY);
-          const diasDesdeDestete=Math.ceil((TODAY.getTime()-destete.getTime())/MS_DAY);
-
-          if(TODAY<destete){
-            const LACT_REAL=Math.ceil((destete.getTime()-tDateMs(lastParto.fecha_parto))/MS_DAY);
-            estado=`Lactancia D${diasDesdeParto}`;color="#0F6E56";bg="#E1F5EE";
-            pct=(diasDesdeParto/LACT_REAL)*100;barColor="#5DCAA5";
-            detalle=`Parió ${fmtLabel(lastParto.fecha_parto)} · ${lastParto.lechones_vivos} lechones · Destete ${desteteProto?.fecha_real?"real":"est."} ${fmtLabel(destete)}`;
-          } else if(diasDesdeDestete>=0&&TODAY<descFin){
-            estado=`Descanso D${diasDesdeDestete}`;color="#7B6FC4";bg="#EEF0FF";
-            pct=(diasDesdeDestete/DESC)*100;barColor="#AFA9EC";
-            detalle=`Descanso/celo · Destete ${fmtLabel(destete)} · Próx. monta est. ${fmtLabel(proxMonta)}`;
-          } else {
-            const diasGest=Math.ceil((TODAY.getTime()-proxMonta.getTime())/MS_DAY);
-            estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
-            pct=Math.min((diasGest/GEST)*100,100);esProyectado=true;barColor="#9FE1CB";
-            detalle=`Gestación estimada · Parto proyectado ${fmtLabel(proxParto)}`;
-          }
-        }
-        return {c,estado,color,bg,pct,detalle,barColor,esProyectado,lastParto,lastMonta};
+        const r=calcEstadoCerda(c);
+        const lastParto=partos.filter(p=>p.cerda_id===c.id).sort((a,b)=>normMs(b.fecha_parto)-normMs(a.fecha_parto))[0];
+        const lastMonta=montas.filter(m=>m.cerda_id===c.id).sort((a,b)=>normMs(b.fecha_monta)-normMs(a.fecha_monta))[0];
+        return{c,estado:r.label,color:r.color,bg:r.bg,pct:r.pct,detalle:r.detalle,barColor:r.barColor,esProyectado:r.esProyectado,lastParto,lastMonta};
       });
 
       // ── SECCIÓN 2: HISTÓRICO (rango configurable) ──
