@@ -1517,10 +1517,10 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
           <label>Fecha Real de Ejecución</label>
           <input type="date" value={form.fecha_real||""} onChange={e=>setForm(f=>({...f,fecha_real:e.target.value}))}/>
         </div>
-        <div className="fgrp">
+        {PERMS.verMontos(role)&&<div className="fgrp">
           <label>Costo Real ($)</label>
           <input type="number" step="0.01" placeholder="0.00" value={form.costo||""} onChange={e=>setForm(f=>({...f,costo:e.target.value}))}/>
-        </div>
+        </div>}
         <div className="fgrp">
           <label>Mozos Utilizados</label>
           <input type="number" placeholder="0" value={form.mozos||""} onChange={e=>setForm(f=>({...f,mozos:e.target.value}))}/>
@@ -1825,7 +1825,13 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       <div className="sc grn"><span className="si">🐷</span><span className="sl">Cerdas Activas</span><span className="sv">{madres.length}</span><span className="str">En producción</span></div>
       <div className="sc"><span className="si">🐗</span><span className="sl">Verracos</span><span className="sv">{verracos.length}</span><span className="str">{verracos.map(v=>v.nombre).join(", ")||"-"}</span></div>
       <div className="sc"><span className="si">🐣</span><span className="sl">Total Partos</span><span className="sv">{partos.length}</span><span className="str">{totalLechones} lechones histórico</span></div>
-      <div className="sc"><span className="si">💰</span><span className="sl">Ventas Lechones</span><span className="sv" style={{fontSize:18}}>{fmt$(totalVentas)}</span><span className="str">{ventas.filter(v=>v.tipo!=="transferencia"&&v.tipo!=="Cerda"&&v.tipo!=="Monta"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0)} lechones · {ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+v.cantidad,0)} cerdas · {ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+v.cantidad,0)} montas</span></div>
+      <div className="sc">
+        <span className="si">💰</span><span className="sl">Ventas Lechones</span>
+        {PERMS.verMontos(role)
+          ?<span className="sv" style={{fontSize:18}}>{fmt$(totalVentas)}</span>
+          :<span className="sv">{ventas.filter(v=>v.tipo!=="transferencia"&&v.tipo!=="Cerda"&&v.tipo!=="Monta"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0)} uds</span>}
+        <span className="str">{ventas.filter(v=>v.tipo!=="transferencia"&&v.tipo!=="Cerda"&&v.tipo!=="Monta"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0)} lechones · {ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+v.cantidad,0)} cerdas · {ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+v.cantidad,0)} montas</span>
+      </div>
     </div>
 
     {/* Tabs + Add button */}
