@@ -1726,6 +1726,15 @@ function CerdosModule({role,toast,userId,userName}){
       .sort((a,b)=>toDateMs(b.fecha_monta)-toDateMs(a.fecha_monta));
     const lastParto=cPartos[0];
     const lastMonta=cMontas[0];
+    // DEBUG temporal — ver en consola del browser
+    if(cerda.nombre==="Iris"){
+      console.log("IRIS DEBUG:",{
+        totalMontas:cMontas.length,
+        lastMonta:lastMonta?.fecha_monta,
+        lastParto:lastParto?.fecha_parto,
+        montasRaw:montas.filter(m=>m.cerda_id===cerda.id).map(m=>m.fecha_monta)
+      });
+    }
     const montaActiva=lastMonta&&(!lastParto||
       toDateMs(lastMonta.fecha_monta)>toDateMs(lastParto.fecha_parto));
     if(montaActiva){
