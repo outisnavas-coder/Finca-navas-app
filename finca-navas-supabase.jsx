@@ -18,7 +18,7 @@ const CSS = `
   body{font-family:'DM Sans',sans-serif;background:${G.cream};color:${G.g900}}
   ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:${G.beige}}::-webkit-scrollbar-thumb{background:${G.light};border-radius:3px}
   .app{display:flex;min-height:100vh}
-  .sidebar{width:256px;min-height:100vh;background:${G.deep};display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;z-index:100;transition:transform .3s}
+  .sidebar{width:256px;height:100vh;background:${G.deep};display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;z-index:100;transition:transform .3s;overflow:hidden}
   .sidebar.closed{transform:translateX(-256px)}
   .slogo{padding:24px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
   .slogo h1{font-family:'Playfair Display',serif;color:#fff;font-size:17px;font-weight:700;line-height:1.3}
@@ -2429,12 +2429,13 @@ function UsuariosPage({toast,userId,userName}){
   const saveNombre=async(id)=>{
     if(!tmpNombre.trim()){toast("El nombre no puede estar vacío","error");return;}
     setSaving(true);
-    const{error}=await supabase.from("perfiles").update({nombre:tmpNombre.trim()}).eq("id",id);
+    const{error,data}=await supabase.from("perfiles").update({nombre:tmpNombre.trim()}).eq("id",id).select();
     setSaving(false);
-    if(error){toast(error.message,"error");return;}
+    if(error){toast(`Error: ${error.message}`,"error");return;}
     toast("Nombre actualizado ✓");
     setEditNombre(null);
-    fetch();
+    // Actualizar localmente sin esperar fetch
+    setPerfiles(prev=>prev.map(p=>p.id===id?{...p,nombre:tmpNombre.trim()}:p));
   };
 
   const rolBadgeStyle=(r)=>({fontSize:11,padding:"2px 9px",borderRadius:20,fontWeight:700,background:r==="admin"?G.pale:r==="socio"?"#E1F5EE":r==="supervisor"?"#EEEDFE":G.goldL,color:ROLES_COLOR[r]||G.g500});
