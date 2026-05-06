@@ -1113,16 +1113,26 @@ function NameModule({role,toast,gastos,ingresos}){
   const fmtD=d=>{if(!d)return"-";const dt=new Date(d+"T12:00:00");return dt.toLocaleDateString("es-PA",{day:"2-digit",month:"short",year:"2-digit"});};
   const diffD=(a,b)=>Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24));
 
-  const marcarCompletado=async(act)=>{
-    const fechaReal=prompt(`Fecha real de "${act.actividad}" (YYYY-MM-DD):`,new Date().toISOString().split("T")[0]);
-    if(!fechaReal)return;
-    const costoStr=prompt("Costo real ($):",act.costo||0);
-    const mozosStr=prompt("Mozos utilizados:",act.mozos||0);
-    await supabase.from("actividades_name").update({
-      fecha_real:fechaReal,estado:"completado",
-      costo:Number(costoStr)||0,mozos:Number(mozosStr)||0
-    }).eq("id",act.id);
-    toast("Actividad marcada como completada");fetch();
+  const [actEdit,setActEdit]=useState(null); // actividad seleccionada para marcar
+
+  const abrirMarcar=(act)=>{
+    setActEdit(act);
+    setForm({fecha_real:new Date().toISOString().split("T")[0],costo:act.costo||"",mozos:act.mozos||""});
+    setModal("marcar_act");
+  };
+
+  const marcarCompletado=async()=>{
+    if(!actEdit)return;
+    setSaving(true);
+    const{error}=await supabase.from("actividades_name").update({
+      fecha_real:form.fecha_real,
+      estado:"completado",
+      costo:Number(form.costo)||0,
+      mozos:Number(form.mozos)||0
+    }).eq("id",actEdit.id);
+    setSaving(false);
+    if(error){toast(error.message,"error");}
+    else{toast("Actividad completada ✓");setModal(null);setActEdit(null);setForm({});fetch();}
   };
 
   if(loading)return<div className="card"><div className="card-b" style={{textAlign:"center",padding:40,color:G.g500}}>Cargando...</div></div>;
@@ -1290,22 +1300,26 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
             <p style={{fontWeight:700,fontSize:13,marginBottom:12,color:G.g700}}>Próximas actividades pendientes</p>
             {pendientes.filter(a=>new Date(a.fecha_estimada)>=TODAY).slice(0,4).map(a=>{
               const dias=diffD(TODAY,a.fecha_estimada);
-              return <div key={a.id} className="fb" style={{marginBottom:10,padding:"10px 14px",background:catBg[a.categoria]||G.goldL,borderRadius:8,borderLeft:`3px solid ${catColor[a.categoria]||G.gold}`}}>
-                <div>
+              return <div key={a.id} className="fb" style={{marginBottom:10,padding:"10px 14px",background:catBg[a.categoria]||G.goldL,borderRadius:8,borderLeft:`3px solid ${catColor[a.categoria]||G.gold}`,gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:600,fontSize:13,color:G.g700}}>{a.actividad}</div>
                   <div style={{fontSize:11,color:G.g500,marginTop:2}}>Estimado: {fmtD(a.fecha_estimada)} — Día {a.dias_estimado}</div>
                 </div>
-                <div style={{textAlign:"right"}}>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
                   <span style={{fontWeight:700,color:catColor[a.categoria]||G.gold,fontSize:13}}>D{dias}</span>
                   <div style={{fontSize:10,color:G.g500}}>días</div>
+                  {role==="admin"&&<button className="btn btn-sm btn-p" style={{fontSize:11,padding:"3px 8px"}} onClick={()=>abrirMarcar(a)}>✓</button>}
                 </div>
               </div>;
             })}
             {vencidas.length>0&&<div style={{marginTop:12}}>
               <p style={{fontWeight:700,fontSize:12,color:G.red,marginBottom:8}}>⚠ Actividades vencidas ({vencidas.length})</p>
-              {vencidas.map(a=><div key={a.id} className="fb" style={{marginBottom:8,padding:"8px 14px",background:G.redL,borderRadius:8,borderLeft:`3px solid ${G.red}`}}>
-                <span style={{fontSize:12,color:G.red,fontWeight:600}}>{a.actividad}</span>
-                <span style={{fontSize:11,color:G.red}}>Vencida: {fmtD(a.fecha_estimada)}</span>
+              {vencidas.map(a=><div key={a.id} className="fb" style={{marginBottom:8,padding:"8px 14px",background:G.redL,borderRadius:8,borderLeft:`3px solid ${G.red}`,gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <span style={{fontSize:12,color:G.red,fontWeight:600}}>{a.actividad}</span>
+                  <div style={{fontSize:11,color:G.red,marginTop:2}}>Vencida: {fmtD(a.fecha_estimada)}</div>
+                </div>
+                {role==="admin"&&<button className="btn btn-sm btn-p" style={{fontSize:11,padding:"3px 8px",flexShrink:0}} onClick={()=>abrirMarcar(a)}>✓</button>}
               </div>)}
             </div>}
           </div>
@@ -1334,7 +1348,7 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
               <td style={{fontWeight:600,color:a.costo>0?G.red:G.g300}}>{a.costo>0?`$${Number(a.costo).toFixed(2)}`:"—"}</td>
               <td style={{textAlign:"center"}}>{a.mozos>0?a.mozos:"—"}</td>
               <td>{a.estado==="completado"?<span className="badge bg">✓ Listo</span>:venc?<span className="badge br">⚠ Vencida</span>:<span className="badge bo">Pendiente</span>}</td>
-              {role==="admin"&&<td>{a.estado!=="completado"&&<button className="btn btn-sm btn-p" onClick={()=>marcarCompletado(a)}>✓ Marcar</button>}</td>}
+              {role==="admin"&&<td>{a.estado!=="completado"&&<button className="btn btn-sm btn-p" onClick={()=>abrirMarcar(a)}>✓ Marcar</button>}</td>}
             </tr>;
           })}</tbody>
         </table></div>
@@ -1375,11 +1389,62 @@ ${done?"✓ "+fmtD(a.fecha_real):"Est: "+fmtD(a.fecha_estimada)}`}
         </div>
       </div>}
     </>}
+
+    {/* ── MODAL MARCAR ACTIVIDAD COMPLETADA ── */}
+    {modal==="marcar_act"&&actEdit&&<div className="mo" onClick={()=>setModal(null)}><div className="md" onClick={e=>e.stopPropagation()}>
+      <div className="fb mb4">
+        <h3>✓ Completar Actividad</h3>
+        <button className="btn btn-o btn-sm" onClick={()=>setModal(null)}>✕</button>
+      </div>
+      <div style={{background:G.pale,borderRadius:8,padding:"10px 14px",marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:14,color:G.deep}}>{actEdit.actividad}</div>
+        <div style={{fontSize:12,color:G.g500,marginTop:3}}>Día {actEdit.dias_estimado} del ciclo · Estimado: {fmtD(actEdit.fecha_estimada)}</div>
+      </div>
+      <div className="fg">
+        <div className="fgrp">
+          <label>Fecha Real de Ejecución</label>
+          <input type="date" value={form.fecha_real||""} onChange={e=>setForm(f=>({...f,fecha_real:e.target.value}))}/>
+        </div>
+        <div className="fgrp">
+          <label>Costo Real ($)</label>
+          <input type="number" step="0.01" placeholder="0.00" value={form.costo||""} onChange={e=>setForm(f=>({...f,costo:e.target.value}))}/>
+        </div>
+        <div className="fgrp">
+          <label>Mozos Utilizados</label>
+          <input type="number" placeholder="0" value={form.mozos||""} onChange={e=>setForm(f=>({...f,mozos:e.target.value}))}/>
+        </div>
+      </div>
+      <div className="fl gap2 mt4">
+        <button className="btn btn-p" disabled={saving||!form.fecha_real} onClick={marcarCompletado}>
+          {saving?"Guardando...":"✓ Marcar como Completada"}
+        </button>
+        <button className="btn btn-o" onClick={()=>setModal(null)}>Cancelar</button>
+      </div>
+    </div></div>}
+
+    {/* ── MODAL NUEVA SIEMBRA ── */}
+    {modal==="siembra"&&<div className="mo" onClick={()=>setModal(null)}><div className="md" onClick={e=>e.stopPropagation()}>
+      <div className="fb mb4"><h3>🌿 Nueva Siembra</h3><button className="btn btn-o btn-sm" onClick={()=>setModal(null)}>✕</button></div>
+      <div className="fg">
+        <div className="fgrp"><label>Nombre</label><input placeholder="Siembra 2026" value={form.nombre||""} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))}/></div>
+        <div className="fgrp"><label>Fecha Siembra</label><input type="date" value={form.fecha_siembra||""} onChange={e=>setForm(f=>({...f,fecha_siembra:e.target.value}))}/></div>
+        <div className="fgrp"><label>Hectáreas</label><input type="number" step="0.1" value={form.hectareas||""} onChange={e=>setForm(f=>({...f,hectareas:e.target.value}))}/></div>
+      </div>
+      <div className="fl gap2 mt4">
+        <button className="btn btn-p" disabled={saving} onClick={async()=>{
+          setSaving(true);
+          const{error}=await supabase.from("siembras").insert({nombre:form.nombre,fecha_siembra:form.fecha_siembra,hectareas:Number(form.hectareas)||1,estado:"activa"});
+          setSaving(false);
+          if(error)toast(error.message,"error");else{toast("Siembra creada ✓");setModal(null);setForm({});fetch();}
+        }}>{saving?"Guardando...":"Guardar"}</button>
+        <button className="btn btn-o" onClick={()=>setModal(null)}>Cancelar</button>
+      </div>
+    </div></div>}
+
   </div>;
 }
 
 // ─── MÓDULO PRODUCCIÓN PORCINA ────────────────────────────────────────────────
-function CerdosModule({role,toast}){
   const [tab,setTab]=useState("timeline");
   const [cerdas,setCerdas]=useState([]);
   const [partos,setPartos]=useState([]);
