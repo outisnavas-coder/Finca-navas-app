@@ -123,12 +123,16 @@ const CSS = `
     .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
     .tab{white-space:nowrap;font-size:12px;padding:7px 12px}
     .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
-    .tw table{min-width:600px}
-    td{padding:9px 11px;vertical-align:middle}
-    .montas-table td{padding:7px 9px!important;font-size:12px}
-    .montas-table th{padding:7px 9px!important;font-size:10px}
+    .tw table{min-width:520px}
+    td{padding:8px 10px;vertical-align:middle}
+    th{padding:8px 10px;font-size:10px}
+    .montas-table td{padding:7px 8px!important;font-size:12px}
+    .montas-table th{padding:7px 8px!important;font-size:10px}
     .ventas-stats-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
     .ventas-stats-grid>div{padding:10px 12px!important}
+    .fecha-col{white-space:nowrap;font-size:11.5px;font-variant-numeric:tabular-nums}
+    .hide-mobile{display:none!important}
+    .badge{font-size:10px;padding:2px 7px}
     .btn{font-size:12px;padding:7px 12px}
     .btn-sm{font-size:11px;padding:4px 8px}
     .md{padding:18px;max-height:95vh;border-radius:14px 14px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%}
@@ -1717,17 +1721,17 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       <div className="card mb4">
         <div className="card-h"><h3>🐷 Cerdas Madres Activas</h3><span className="badge bg">{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").length}</span></div>
         <div className="tw"><table>
-          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Producción</th><th>Nacimiento</th><th>Edad</th><th>Peso</th><th>Partos</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Producción</th><th className="hide-mobile">Nacimiento</th><th className="hide-mobile">Edad</th><th className="hide-mobile">Peso</th><th>Partos</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{cerdas.filter(c=>c.tipo==="Madre"&&c.estado==="Activa").map(c=><tr key={c.id}>
             <td style={{fontFamily:"monospace",fontSize:12}}>{c.codigo}</td>
             <td style={{fontWeight:700}}>{c.nombre}</td>
             <td><span className={`badge ${estadoBadge(c.estado)}`}>{c.estado}</span></td>
             <td>{(()=>{const ep=estadoProduccion(c);return <span style={{fontSize:11,padding:"2px 8px",borderRadius:20,background:ep.bg,color:ep.color,fontWeight:600,whiteSpace:"nowrap"}}>{ep.label}</span>;})()}</td>
-            <td style={{fontSize:12}}>{c.fecha_nacimiento||"-"}</td>
-            <td style={{fontSize:12,fontWeight:600,color:G.deep}}>{calcEdad(c.fecha_nacimiento)}</td>
-            <td>{c.peso_kg?`${c.peso_kg}kg`:"-"}</td>
+            <td className="hide-mobile" style={{fontSize:12}}>{c.fecha_nacimiento||"-"}</td>
+            <td className="hide-mobile" style={{fontSize:12,fontWeight:600,color:G.deep}}>{calcEdad(c.fecha_nacimiento)}</td>
+            <td className="hide-mobile">{c.peso_kg?`${c.peso_kg}kg`:"-"}</td>
             <td style={{fontWeight:600,color:G.deep}}>{partos.filter(p=>p.cerda_id===c.id).length}</td>
-            <td style={{fontSize:12,color:G.g500}}>{c.notas||"-"}</td>
+            <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{c.notas||"-"}</td>
             {role==="admin"&&<td><button className="btn btn-sm btn-o" onClick={()=>openEdit("cerda",c)}>✏</button></td>}
           </tr>)}</tbody>
         </table></div>
@@ -1776,18 +1780,18 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
           </div>
         </div>
         <div className="tw"><table className="montas-table">
-          <thead><tr><th>Fecha Monta</th><th>Parto Est. (114d)</th><th>Parto Real</th><th>Días restantes</th><th>Confirmado</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th className="fecha-col">Fecha Monta</th><th className="fecha-col">Parto Est. (114d)</th><th className="fecha-col">Parto Real</th><th>Días restantes</th><th>Confirmado</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{mts.map(m=>{
             const fp=m.fecha_monta?toISO(addD(m.fecha_monta,GEST)):"";
             const partoReal=partos.find(p=>p.cerda_id===m.cerda_id&&Math.abs(diffD(fp,p.fecha_parto))<=30);
             const dias=fp?diffD(TODAY,fp):null;
             return <tr key={m.id}>
-              <td style={{fontWeight:600}}>{fmtDisp(m.fecha_monta)}</td>
-              <td style={{color:G.gold,fontWeight:600}}>{fp?fmtDisp(fp):"-"}</td>
-              <td style={{fontWeight:600,color:partoReal?G.deep:G.g300}}>{partoReal?fmtDisp(partoReal.fecha_parto):"-"}</td>
+              <td className="fecha-col" style={{fontWeight:600}}>{fmtDisp(m.fecha_monta)}</td>
+              <td className="fecha-col" style={{color:G.gold,fontWeight:600}}>{fp?fmtDisp(fp):"-"}</td>
+              <td className="fecha-col" style={{fontWeight:600,color:partoReal?G.deep:G.g300}}>{partoReal?fmtDisp(partoReal.fecha_parto):"-"}</td>
               <td>{dias!==null?<span style={{fontWeight:700,color:dias<0?G.g500:dias<14?G.red:dias<30?G.gold:G.deep}}>{dias<0?partoReal?"✓ Parto":"No preñada":dias+"d"}</span>:"-"}</td>
-              <td><span className={`badge ${m.confirmado?"bg":"bo"}`}>{m.confirmado?"✓ Confirmado":"Pendiente"}</span></td>
-              <td style={{fontSize:12,color:G.g500}}>{m.notas||"-"}</td>
+              <td><span className={`badge ${m.confirmado?"bg":"bo"}`}>{m.confirmado?"✓ Conf":"Pend."}</span></td>
+              <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{m.notas||"-"}</td>
               {role==="admin"&&<td style={{display:"flex",gap:4}}>
                 <button className="btn btn-sm btn-o" onClick={()=>openEdit("monta",m)}>✏</button>
                 <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("celos_montas",m.id)}>✕</button>
@@ -1814,13 +1818,13 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             </div>
           </div>
           <div className="tw"><table>
-            <thead><tr><th>Fecha Parto</th><th>Vivos</th><th>Muertos</th><th>Total</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+            <thead><tr><th className="fecha-col">Fecha Parto</th><th>Vivos</th><th>Muertos</th><th>Total</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
             <tbody>{pts.map(p=><tr key={p.id}>
-              <td style={{fontWeight:600}}>{fmtDisp(p.fecha_parto)}</td>
+              <td className="fecha-col" style={{fontWeight:600}}>{fmtDisp(p.fecha_parto)}</td>
               <td style={{fontWeight:700,color:G.deep}}>{p.lechones_vivos}</td>
               <td style={{color:p.lechones_muertos>0?G.red:G.g500}}>{p.lechones_muertos}</td>
               <td style={{fontWeight:700}}>{p.lechones_vivos+p.lechones_muertos}</td>
-              <td style={{fontSize:12,color:G.g500}}>{p.notas||"-"}</td>
+              <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{p.notas||"-"}</td>
               {role==="admin"&&<td style={{display:"flex",gap:4}}>
                 <button className="btn btn-sm btn-o" onClick={()=>openEdit("parto",p)}>✏</button>
                 <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("partos",p.id)}>✕</button>
@@ -1888,15 +1892,15 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             </div>
           </div>
           <div className="tw"><table>
-            <thead><tr><th>Vacuna</th><th>Fecha</th><th>Próxima Dosis</th><th>Días</th><th>Veterinario</th>{role==="admin"&&<th></th>}</tr></thead>
+            <thead><tr><th>Vacuna</th><th className="fecha-col">Fecha</th><th className="fecha-col">Próxima Dosis</th><th>Días</th><th className="hide-mobile">Veterinario</th>{role==="admin"&&<th></th>}</tr></thead>
             <tbody>{vacs.map(v=>{
               const dias=v.proxima_dosis?diffD(TODAY,v.proxima_dosis):null;
               return <tr key={v.id}>
                 <td><span className="badge bb">{v.vacuna}</span></td>
-                <td>{fmtDisp(v.fecha)}</td>
-                <td style={{color:dias!==null&&dias<7?G.red:G.g700,fontWeight:dias!==null&&dias<7?700:400}}>{fmtDisp(v.proxima_dosis)}</td>
+                <td className="fecha-col">{fmtDisp(v.fecha)}</td>
+                <td className="fecha-col" style={{color:dias!==null&&dias<7?G.red:G.g700,fontWeight:dias!==null&&dias<7?700:400}}>{fmtDisp(v.proxima_dosis)}</td>
                 <td>{dias!==null?<span style={{fontWeight:700,color:dias<0?G.g500:dias<7?G.red:dias<30?G.gold:G.deep}}>{dias<0?"Vencida":dias+"d"}</span>:"-"}</td>
-                <td style={{fontSize:12}}>{v.veterinario||"-"}</td>
+                <td className="hide-mobile" style={{fontSize:12}}>{v.veterinario||"-"}</td>
                 {role==="admin"&&<td style={{display:"flex",gap:4}}>
                   <button className="btn btn-sm btn-o" onClick={()=>openEdit("vacuna",v)}>✏</button>
                   <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("vacunas_cerdas",v.id)}>✕</button>
@@ -1961,18 +1965,18 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         <div className="sc"><span className="si">🐄</span><span className="sl">Venta Cerdas</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+Number(v.total),0))}</span></div>
         <div className="sc"><span className="si">🐗</span><span className="sl">Ingresos Monta</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+Number(v.total),0))}</span></div>
       </div>
-      <div className="card">
+        <div className="card">
         <div className="card-h"><h3>🤝 Ventas de Lechones</h3></div>
         <div className="tw"><table>
-          <thead><tr><th>Fecha</th><th>Tipo</th><th>Estatus</th><th>Cantidad</th><th>Total</th><th>Comprador</th><th>Pago</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
+          <thead><tr><th className="fecha-col">Fecha</th><th>Tipo</th><th>Estatus</th><th>Cant.</th><th>Total</th><th className="hide-mobile">Comprador</th><th className="hide-mobile">Pago</th><th className="hide-mobile">Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{ventas.map(v=><tr key={v.id}>
-            <td>{fmtDisp(v.fecha)}</td>
-            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":v.tipo==="transferencia"?"bo":"bg"}`}>{v.tipo==="transferencia"?"Transferencia":v.tipo||"Lechon"}</span></td>
+            <td className="fecha-col">{fmtDisp(v.fecha)}</td>
+            <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":v.tipo==="transferencia"?"bo":"bg"}`}>{v.tipo==="transferencia"?"Transfer":v.tipo||"Lechon"}</span></td>
             <td><span className={`badge ${v.estatus==="Abono"?"bo":v.estatus==="Cancelacion"?"bg":"bk"}`}>{v.estatus||"Venta"}</span></td>
             <td style={{fontWeight:700,color:v.estatus==="Abono"?G.g500:G.deep}}>{v.estatus==="Abono"?"-":v.cantidad}</td>
             <td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
-            <td>{v.comprador||"-"}</td><td><span className="badge bk">{v.forma_pago||"-"}</span></td>
-            <td style={{fontSize:12,color:G.g500}}>{v.notas||"-"}</td>
+            <td className="hide-mobile">{v.comprador||"-"}</td><td className="hide-mobile"><span className="badge bk">{v.forma_pago||"-"}</span></td>
+            <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{v.notas||"-"}</td>
             {role==="admin"&&<td style={{display:"flex",gap:4}}>
               <button className="btn btn-sm btn-o" onClick={()=>openEdit("venta",v)}>✏</button>
               <button className="btn btn-sm" style={{background:G.redL,color:G.red,border:"none"}} onClick={()=>deleteRow("ventas_lechones",v.id)}>✕</button>
