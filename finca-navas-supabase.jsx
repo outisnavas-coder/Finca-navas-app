@@ -1708,19 +1708,31 @@ function CerdosModule({role,toast,userId,userName}){
     const cMontas=montas.filter(m=>m.cerda_id===cerda.id).sort((a,b)=>b.fecha_monta.localeCompare(a.fecha_monta));
     const lastParto=cPartos[0];
     const lastMonta=cMontas[0];
-    if(lastParto){
+
+    // Si hay monta posterior al último parto → está en gestación
+    const montaPostParto=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
+    if(montaPostParto){
+      const proxParto=addD(lastMonta.fecha_monta,GEST);
+      const dm=diffD(TODAY,proxParto);
+      const diasGest=GEST-dm;
+      if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
+    }
+
+    // Si tiene parto reciente y NO hay monta posterior → lactancia o descanso
+    if(lastParto&&!montaPostParto){
       const dp=diffD(lastParto.fecha_parto,TODAY);
       if(dp>=0&&dp<LACT)return{label:`Lactancia D${dp}`,color:"#0F6E56",bg:"#E1F5EE"};
       if(dp>=LACT&&dp<LACT+DESC)return{label:"Descanso",color:"#534AB7",bg:"#EEEDFE"};
     }
-    if(lastMonta){
+
+    // Solo monta sin parto registrado
+    if(lastMonta&&!lastParto){
       const proxParto=addD(lastMonta.fecha_monta,GEST);
       const dm=diffD(TODAY,proxParto);
-      if(dm>0&&dm<=GEST){
-        const diasGest=GEST-dm;
-        return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
-      }
+      const diasGest=GEST-dm;
+      if(diasGest>=0&&diasGest<=GEST)return{label:`Gestación D${diasGest}`,color:"#185FA5",bg:"#E6F1FB"};
     }
+
     return{label:"Activa",color:G.deep,bg:G.pale};
   };
 
@@ -1751,8 +1763,14 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       const lastMonta=cMontas[cMontas.length-1];
 
       // Calculate projected next cycle
+      // Si hay monta posterior al último parto, usar esa monta para proyectar
+      const montaPostParto=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
       let proxMonta=null,proxParto=null;
-      if(lastParto){
+      if(montaPostParto){
+        // Ya tiene monta real → proyectar parto desde esa monta
+        proxParto=addD(lastMonta.fecha_monta,GEST);
+      } else if(lastParto){
+        // Aún en lactancia/descanso → proyectar próxima monta
         const destete=addD(lastParto.fecha_parto,LACT);
         const descFin=addD(destete,DESC);
         proxMonta=descFin>TODAY?descFin:addD(TODAY,7);
@@ -1771,7 +1789,15 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         if(le>ls)segs.push({l:ls,w:le-ls,color:"#5DCAA5",title:`Lactancia hasta ${fmtS(lE)}`});
         if(de>ds)segs.push({l:ds,w:de-ds,color:"#AFA9EC",title:"Descanso/celo"});
       });
-      if(proxMonta&&proxParto){
+      // Segmento de gestación real o proyectada
+      if(montaPostParto&&proxParto){
+        // Gestación real desde la monta registrada
+        const gs=dateToPct(lastMonta.fecha_monta),ge=dateToPct(proxParto);
+        const lE=addD(proxParto,LACT);
+        const ls=ge,le=dateToPct(lE);
+        if(ge>gs)segs.push({l:gs,w:ge-gs,color:"#FAC775",proj:true,title:`Gestación → parto est. ${fmtS(proxParto)}`});
+        if(le>ls)segs.push({l:ls,w:le-ls,color:"#EF9F27",proj:true,title:"Lactancia proyectada"});
+      } else if(proxMonta&&proxParto){
         const lE=addD(proxParto,LACT);
         const ps=dateToPct(proxMonta),pe=dateToPct(proxParto);
         const ls=pe,le=dateToPct(lE);
@@ -1786,10 +1812,16 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       if(proxMonta){const x=dateToPct(proxMonta);if(x>=0&&x<=100)dots.push({x,color:"#EF9F27",title:`Monta proy. ${fmtS(proxMonta)}`});}
       if(proxParto){const x=dateToPct(proxParto);if(x>=0&&x<=100)dots.push({x,color:"#E24B4A",title:`Parto proy. ${fmtS(proxParto)}`});}
 
-      // Status — basado en fecha real del ultimo parto
+      // Status — prioriza monta posterior al parto
       let sLabel="Activa",sColor=G.deep,sBg=G.pale;
       if(c.estado!=="Activa"){sLabel=c.estado;sColor=G.g500;sBg=G.g100;}
-      else if(lastParto){
+      else if(montaPostParto&&proxParto){
+        const d=diffD(TODAY,proxParto);
+        const diasGest=GEST-d;
+        if(d>=0&&d<=14){sLabel=`Parto en ${d}d`;sColor=G.red;sBg=G.redL;}
+        else if(diasGest>=0&&diasGest<=GEST){sLabel=`Gestación D${diasGest}`;sColor="#185FA5";sBg="#E6F1FB";}
+        else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor="#185FA5";sBg="#E6F1FB";}
+      } else if(lastParto&&!montaPostParto){
         const diasDesdeParto=Math.ceil((TODAY-new Date(lastParto.fecha_parto+"T12:00:00"))/(1000*60*60*24));
         const desteteReal=addD(lastParto.fecha_parto,LACT);
         const descFinReal=addD(desteteReal,DESC);
@@ -1798,13 +1830,13 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         else if(proxParto){
           const d=diffD(TODAY,proxParto);
           if(d>=0&&d<=14){sLabel=`Parto en ${d}d`;sColor=G.red;sBg=G.redL;}
-          else if(d>=0&&d<=60){sLabel=`Gestación`;sColor:"#5DCAA5";sBg=G.pale;}
-          else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.blue;sBg=G.blueL;}
+          else if(d>=0&&d<=60){sLabel=`Gestación`;sColor="#185FA5";sBg="#E6F1FB";}
+          else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.deep;sBg=G.pale;}
         }
       } else if(proxParto){
         const d=diffD(TODAY,proxParto);
         if(d>=0&&d<=14){sLabel=`Parto en ${d}d`;sColor=G.red;sBg=G.redL;}
-        else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.blue;sBg=G.blueL;}
+        else{sLabel=`Parto: ${fmtS(proxParto)}`;sColor=G.deep;sBg=G.pale;}
       }
 
       // Checklist — usa protocolo_partos real
