@@ -1918,7 +1918,18 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         let estado="Sin datos",color=G.g300,bg=G.g100,pct=0,detalle="";
         let barColor=G.g300,esProyectado=false;
 
-        if(lastParto){
+        // Si hay monta posterior al último parto → gestación real
+        const montaPostParto=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
+
+        if(montaPostParto){
+          const proxParto=addDays(lastMonta.fecha_monta,GEST);
+          const diasGest=Math.ceil((TODAY.getTime()-toMs(lastMonta.fecha_monta))/MS_DAY);
+          if(diasGest>=0&&diasGest<=GEST){
+            estado=`Gestación D${diasGest}`;color="#185FA5";bg="#E6F1FB";
+            pct=(diasGest/GEST)*100;barColor="#FAC775";
+            detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. ${fmtLabel(proxParto)}`;
+          }
+        } else if(lastParto){
           // Usar fecha real de destete del protocolo si existe
           const protoUltParto=protocolo.filter(x=>x.parto_id===lastParto.id);
           const desteteProto=protoUltParto.find(x=>x.procedimiento==="Destete");
@@ -1942,18 +1953,18 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             pct=(diasDesdeDestete/DESC)*100;barColor="#AFA9EC";
             detalle=`Descanso/celo · Destete ${fmtLabel(destete)} · Próx. monta est. ${fmtLabel(proxMonta)}`;
           } else {
-            // En gestación proyectada
+            // En gestación proyectada (sin monta real post-parto)
             const diasGest=Math.ceil((TODAY.getTime()-proxMonta.getTime())/MS_DAY);
             estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
             pct=Math.min((diasGest/GEST)*100,100);esProyectado=true;barColor="#9FE1CB";
             detalle=`Gestación estimada · Parto proyectado ${fmtLabel(proxParto)}`;
           }
-        } else if(lastMonta){
+        } else if(lastMonta&&!montaPostParto){
           const proxParto=addDays(lastMonta.fecha_monta,GEST);
           const diasGest=Math.ceil((TODAY.getTime()-toMs(lastMonta.fecha_monta))/MS_DAY);
           if(diasGest>=0&&diasGest<=GEST){
-            estado=`Gestación D${diasGest}`;color="#3BA57A";bg=G.pale;
-            pct=(diasGest/GEST)*100;barColor="#9FE1CB";
+            estado=`Gestación D${diasGest}`;color="#185FA5";bg="#E6F1FB";
+            pct=(diasGest/GEST)*100;barColor="#FAC775";
             detalle=`Monta ${fmtLabel(lastMonta.fecha_monta)} · Parto est. ${fmtLabel(proxParto)}`;
           }
         }
@@ -2008,8 +2019,17 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         });
         cMontas.forEach(m=>{const x=dPct(m.fecha_monta);if(x>=0&&x<=100)dots.push({x,color:"#639922",title:`Monta ${fmtLabel(m.fecha_monta)}`});});
 
-        // Próximo ciclo proyectado
-        if(lastParto){
+        // Próximo ciclo — si hay monta posterior al parto, usar esa monta real
+        const montaPostPartoH=lastMonta&&(!lastParto||lastMonta.fecha_monta>lastParto.fecha_parto);
+        if(montaPostPartoH){
+          // Gestación real desde la monta registrada
+          const proxParto=addDays(lastMonta.fecha_monta,GEST);
+          const proxLact=addDays(proxParto,LACT);
+          const ms=dPct(lastMonta.fecha_monta),pe=dPct(proxParto),le=dPct(proxLact);
+          if(pe>ms&&pe>0&&ms<100)segs.push({l:Math.max(ms,0),w:Math.min(pe,100)-Math.max(ms,0),color:"#FAC775",proj:true,title:`Gestación → ${fmtLabel(proxParto)}`});
+          if(le>pe&&le>0&&pe<100)segs.push({l:Math.max(pe,0),w:Math.min(le,100)-Math.max(pe,0),color:"#EF9F27",proj:true,title:`Lactancia proyectada`});
+          const xpp=dPct(proxParto);if(xpp>=0&&xpp<=100)dots.push({x:xpp,color:"#E24B4A",title:`Parto proyectado ${fmtLabel(proxParto)}`});
+        } else if(lastParto){
           const destete=addDays(lastParto.fecha_parto,LACT);
           const descFin=addDays(destete,DESC);
           const proxMonta=new Date(Math.max(descFin.getTime(),TODAY.getTime()));
