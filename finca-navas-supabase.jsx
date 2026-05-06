@@ -176,7 +176,7 @@ const MONTH_NAMES = ["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","O
 const isConfigured = SUPABASE_URL !== "https://TU_PROJECT_ID.supabase.co";
 
 // ─── CALC ALERTAS ─────────────────────────────────────────────────────────────
-function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=[],inventario=[]}){
+function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=[],inventario=[],siembras=[],actividadesName=[]}){
   const TODAY=new Date();
   const addD=(d,n)=>{const r=new Date(d+"T12:00:00");r.setDate(r.getDate()+n);return r;};
   const diffD=(a,b)=>Math.ceil((new Date(typeof b==="string"?b+"T12:00:00":b)-new Date(typeof a==="string"?a+"T12:00:00":a))/(1000*60*60*24));
@@ -262,6 +262,37 @@ function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=
       }
     }
   }
+
+  // ── 7. SIEMBRAS ACTIVAS — COSECHA PRÓXIMA ────────────────────────────────
+  siembras.filter(s=>s.estado==="activa").forEach(s=>{
+    const actsS=actividadesName.filter(a=>a.siembra_id===s.id);
+    const actCosecha=actsS.find(a=>a.actividad==="Cosecha"||a.actividad?.toLowerCase().includes("cosecha"));
+    const fechaCosecha=actCosecha?.fecha_estimada;
+    if(fechaCosecha){
+      const dias=diffD(TODAY,fechaCosecha);
+      if(dias>=0&&dias<=21){
+        alertas.push({id:`cosecha-${s.id}`,tipo:dias<=7?"critica":"advertencia",icono:"🌿",titulo:`Cosecha próxima — ${s.nombre}`,sub:`Estimada el ${new Date(fechaCosecha+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short"})} · En ${dias}d · ${s.hectareas} ha`,modulo:"name_m",orden:dias<=7?1:2});
+      } else if(dias<0&&!actCosecha?.fecha_real){
+        alertas.push({id:`cosecha-venc-${s.id}`,tipo:"critica",icono:"🌿",titulo:`Cosecha VENCIDA — ${s.nombre}`,sub:`Estimada hace ${Math.abs(dias)}d · Sin registrar producción real · ${s.hectareas} ha`,modulo:"name_m",orden:1});
+      }
+    }
+    // ── 8. ACTIVIDADES DE ÑAME VENCIDAS ──────────────────────────────────
+    const actsVencidas=actsS.filter(a=>a.estado==="pendiente"&&a.fecha_estimada&&diffD(TODAY,a.fecha_estimada)<0);
+    if(actsVencidas.length>0){
+      alertas.push({id:`acts-venc-${s.id}`,tipo:"advertencia",icono:"📋",titulo:`${actsVencidas.length} actividad${actsVencidas.length>1?"es":""} vencida${actsVencidas.length>1?"s":""} — ${s.nombre}`,sub:actsVencidas.slice(0,2).map(a=>`${a.actividad} (D${a.dias_estimado})`).join(", ")+(actsVencidas.length>2?` y ${actsVencidas.length-2} más`:""),modulo:"name_m",orden:3});
+    }
+    // ── 9. ACTIVIDADES PRÓXIMAS (≤7 días) ────────────────────────────────
+    const actsProximas=actsS.filter(a=>a.estado==="pendiente"&&a.fecha_estimada&&diffD(TODAY,a.fecha_estimada)>=0&&diffD(TODAY,a.fecha_estimada)<=7);
+    actsProximas.forEach(a=>{
+      const dias=diffD(TODAY,a.fecha_estimada);
+      alertas.push({id:`act-prox-${a.id}`,tipo:"info",icono:"🗓️",titulo:`Actividad próxima — ${s.nombre}`,sub:`${a.actividad} · En ${dias}d (${new Date(a.fecha_estimada+"T12:00:00").toLocaleDateString("es-PA",{day:"2-digit",month:"short"})}) · Día ${a.dias_estimado} del ciclo`,modulo:"name_m",orden:4});
+    });
+    // ── 10. SIEMBRA SIN PRODUCCIÓN REAL REGISTRADA (>230 días) ───────────
+    const diasSiembra=diffD(s.fecha_siembra,TODAY);
+    if(diasSiembra>230&&!s.produccion_real_qq){
+      alertas.push({id:`prod-falta-${s.id}`,tipo:"advertencia",icono:"📊",titulo:`Producción no registrada — ${s.nombre}`,sub:`Lleva ${diasSiembra} días desde siembra · Registrar quintales cosechados`,modulo:"name_m",orden:3});
+    }
+  });
 
   return alertas.sort((a,b)=>a.orden-b.orden);
 }
@@ -2366,6 +2397,9 @@ export default function App(){
   const [montas,setMontas]=useState([]);
   const [vacunas,setVacunas]=useState([]);
   const [ventas,setVentas]=useState([]);
+  // ── datos ñame para alertas ──
+  const [siembras,setSiembras]=useState([]);
+  const [actividadesName,setActividadesName]=useState([]);
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState(null);
 
@@ -2397,7 +2431,7 @@ export default function App(){
   const fetchAll=useCallback(async()=>{
     if(!user)return;
     setLoading(true);
-    const [g,i,d,inv,c,p,m,v,vt]=await Promise.all([
+    const [g,i,d,inv,c,p,m,v,vt,s,an]=await Promise.all([
       supabase.from("gastos").select("*").order("fecha",{ascending:false}),
       supabase.from("ingresos").select("*").order("fecha",{ascending:false}),
       supabase.from("deudas").select("*").order("created_at",{ascending:false}),
@@ -2407,9 +2441,12 @@ export default function App(){
       supabase.from("celos_montas").select("*").order("fecha_monta",{ascending:false}),
       supabase.from("vacunas_cerdas").select("*,cerdas(nombre)").order("fecha",{ascending:false}),
       supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
+      supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
+      supabase.from("actividades_name").select("*").order("fecha_estimada",{ascending:true}),
     ]);
     setGastos(g.data||[]);setIngresos(i.data||[]);setDeudas(d.data||[]);setInventario(inv.data||[]);
     setCerdas(c.data||[]);setPartos(p.data||[]);setMontas(m.data||[]);setVacunas(v.data||[]);setVentas(vt.data||[]);
+    setSiembras(s.data||[]);setActividadesName(an.data||[]);
     setLoading(false);
   },[user]);
 
@@ -2433,7 +2470,7 @@ export default function App(){
   const nombre=user?.perfil?.nombre||user?.email||"Usuario";
   const initials=nombre.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
 
-  const alertas=calcAlertas({cerdas,partos,montas,vacunas,ventas,deudas,inventario});
+  const alertas=calcAlertas({cerdas,partos,montas,vacunas,ventas,deudas,inventario,siembras,actividadesName});
   const alertasCriticas=alertas.filter(a=>a.tipo==="critica").length;
 
   const [dashAnio,setDashAnio]=useState(new Date().getFullYear());
