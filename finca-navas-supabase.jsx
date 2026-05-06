@@ -279,7 +279,7 @@ function calcAlertas({cerdas=[],partos=[],montas=[],vacunas=[],ventas=[],deudas=
   // ── 3. VACUNAS VENCIDAS / PRÓXIMAS ───────────────────────────────────────
   vacunas.filter(v=>v.proxima_dosis).forEach(v=>{
     const cerda=cerdas.find(c=>c.id===v.cerda_id);
-    const nombre=cerda?.nombre||v.cerdas?.nombre||"Cerda";
+    const nombre=cerda?.nombre||"Cerda";
     const dias=diffD(TODAY,v.proxima_dosis);
     if(dias<0){
       alertas.push({id:`vac-venc-${v.id}`,tipo:"critica",icono:"💉",titulo:`Vacuna VENCIDA — ${nombre}`,sub:`${v.vacuna} · Venció hace ${Math.abs(dias)}d`,modulo:"cerdos_m",orden:1});
@@ -1593,9 +1593,9 @@ function CerdosModule({role,toast,userId,userName}){
     try{
       const [c,p,m,v,vt,pr]=await Promise.all([
         supabase.from("cerdas").select("*").order("codigo"),
-        supabase.from("partos").select("*,cerdas(nombre,codigo)").order("fecha_parto",{ascending:false}),
-        supabase.from("celos_montas").select("*,cerdas!celos_montas_cerda_id_fkey(nombre,codigo)").order("fecha_monta",{ascending:false}),
-        supabase.from("vacunas_cerdas").select("*,cerdas(nombre,codigo)").order("fecha",{ascending:false}),
+        supabase.from("partos").select("*").order("fecha_parto",{ascending:false}),
+        supabase.from("celos_montas").select("*").order("fecha_monta",{ascending:false}),
+        supabase.from("vacunas_cerdas").select("*").order("fecha",{ascending:false}),
         supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
         supabase.from("protocolo_partos").select("*").order("fecha_estimada",{ascending:true}),
       ]);
@@ -1694,11 +1694,12 @@ function CerdosModule({role,toast,userId,userName}){
 
   // Group data
   const montasByCerda={};
-  montas.forEach(m=>{const n=m.cerdas?.nombre||"?";if(!montasByCerda[n])montasByCerda[n]=[];montasByCerda[n].push(m);});
+  const getCerdaNombre=id=>cerdas.find(c=>c.id===id)?.nombre||"?";
+  montas.forEach(m=>{const n=getCerdaNombre(m.cerda_id);if(!montasByCerda[n])montasByCerda[n]=[];montasByCerda[n].push(m);});
   const partosByCerda={};
-  partos.forEach(p=>{const n=p.cerdas?.nombre||"?";if(!partosByCerda[n])partosByCerda[n]=[];partosByCerda[n].push(p);});
+  partos.forEach(p=>{const n=getCerdaNombre(p.cerda_id);if(!partosByCerda[n])partosByCerda[n]=[];partosByCerda[n].push(p);});
   const vacunasByCerda={};
-  vacunas.forEach(v=>{const n=v.cerdas?.nombre||"?";if(!vacunasByCerda[n])vacunasByCerda[n]=[];vacunasByCerda[n].push(v);});
+  vacunas.forEach(v=>{const n=getCerdaNombre(v.cerda_id);if(!vacunasByCerda[n])vacunasByCerda[n]=[];vacunasByCerda[n].push(v);});
 
   const estadoBadge=(e)=>e==="Activa"?"bg":e==="Muerta"?"br":e==="Vendida"?"bo":"bk";
   const estadoProduccion=(cerda)=>{
@@ -2847,7 +2848,7 @@ export default function App(){
         supabase.from("cerdas").select("*"),
         supabase.from("partos").select("*").order("fecha_parto",{ascending:false}),
         supabase.from("celos_montas").select("*").order("fecha_monta",{ascending:false}),
-        supabase.from("vacunas_cerdas").select("*,cerdas(nombre)").order("fecha",{ascending:false}),
+        supabase.from("vacunas_cerdas").select("*").order("fecha",{ascending:false}),
         supabase.from("ventas_lechones").select("*").order("fecha",{ascending:false}),
         supabase.from("siembras").select("*").order("fecha_siembra",{ascending:false}),
         supabase.from("actividades_name").select("*").order("fecha_estimada",{ascending:true}),
