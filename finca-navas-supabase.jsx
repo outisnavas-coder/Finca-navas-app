@@ -103,7 +103,8 @@ const CSS = `
   @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
   .config-banner{background:${G.goldL};border:1px solid ${G.gold};border-radius:12px;padding:16px 20px;margin-bottom:20px;font-size:13.5px;color:${G.gold};line-height:1.6}
   .config-banner code{background:rgba(181,134,13,.15);padding:2px 7px;border-radius:5px;font-family:monospace;font-size:12px}
-  .fil-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+  .ventas-stats-grid{display:flex!important;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  .ventas-stats-grid>div{padding:12px 20px!important}
   .fil-row select{padding:7px 11px;border:1.5px solid ${G.g300};border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;color:${G.g900};background:#fff;outline:none}
   .fil-row select:focus{border-color:${G.mid}}
   footer{padding:14px 24px;border-top:1px solid ${G.beigeD};background:#fff;display:flex;justify-content:space-between;align-items:center}
@@ -123,6 +124,11 @@ const CSS = `
     .tab{white-space:nowrap;font-size:12px;padding:7px 12px}
     .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
     .tw table{min-width:600px}
+    td{padding:9px 11px;vertical-align:middle}
+    .montas-table td{padding:7px 9px!important;font-size:12px}
+    .montas-table th{padding:7px 9px!important;font-size:10px}
+    .ventas-stats-grid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
+    .ventas-stats-grid>div{padding:10px 12px!important}
     .btn{font-size:12px;padding:7px 12px}
     .btn-sm{font-size:11px;padding:4px 8px}
     .md{padding:18px;max-height:95vh;border-radius:14px 14px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%}
@@ -1769,7 +1775,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             }}>+ Monta</button>}
           </div>
         </div>
-        <div className="tw"><table>
+        <div className="tw"><table className="montas-table">
           <thead><tr><th>Fecha Monta</th><th>Parto Est. (114d)</th><th>Parto Real</th><th>Días restantes</th><th>Confirmado</th><th>Notas</th>{role==="admin"&&<th></th>}</tr></thead>
           <tbody>{mts.map(m=>{
             const fp=m.fecha_monta?toISO(addD(m.fecha_monta,GEST)):"";
@@ -1920,22 +1926,22 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         return <div className="card mb4">
           <div className="card-h"><h3>🐷 Lechones — Resumen</h3></div>
           <div className="card-b">
-            <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:16}}>
-              <div style={{textAlign:"center",padding:"12px 20px",background:G.pale,borderRadius:8}}>
-                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Total Nacidos</div>
-                <div style={{fontSize:24,fontWeight:700,color:G.deep}}>{totalNacidos}</div>
+          <div className="ventas-stats-grid">
+              <div style={{textAlign:"center",padding:"10px 12px",background:G.pale,borderRadius:8}}>
+                <div style={{fontSize:10,color:G.g500,textTransform:"uppercase",marginBottom:3,letterSpacing:".4px"}}>Total Nacidos</div>
+                <div style={{fontSize:22,fontWeight:700,color:G.deep}}>{totalNacidos}</div>
               </div>
-              <div style={{textAlign:"center",padding:"12px 20px",background:G.goldL,borderRadius:8}}>
-                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Vendidos</div>
-                <div style={{fontSize:24,fontWeight:700,color:G.gold}}>{totalVendidos}</div>
+              <div style={{textAlign:"center",padding:"10px 12px",background:G.goldL,borderRadius:8}}>
+                <div style={{fontSize:10,color:G.g500,textTransform:"uppercase",marginBottom:3,letterSpacing:".4px"}}>Vendidos</div>
+                <div style={{fontSize:22,fontWeight:700,color:G.gold}}>{totalVendidos}</div>
               </div>
-              <div style={{textAlign:"center",padding:"12px 20px",background:"#EEF2FF",borderRadius:8}}>
-                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Transferidos</div>
-                <div style={{fontSize:24,fontWeight:700,color:"#4F46E5"}}>{totalTransferidos}</div>
+              <div style={{textAlign:"center",padding:"10px 12px",background:"#EEF2FF",borderRadius:8}}>
+                <div style={{fontSize:10,color:G.g500,textTransform:"uppercase",marginBottom:3,letterSpacing:".4px"}}>Transferidos</div>
+                <div style={{fontSize:22,fontWeight:700,color:"#4F46E5"}}>{totalTransferidos}</div>
               </div>
-              <div style={{textAlign:"center",padding:"12px 20px",background:disponibles>0?"#E1F5EE":G.g100,borderRadius:8}}>
-                <div style={{fontSize:11,color:G.g500,textTransform:"uppercase",marginBottom:4}}>Disponibles</div>
-                <div style={{fontSize:24,fontWeight:700,color:disponibles>0?"#0F6E56":G.g500}}>{disponibles}</div>
+              <div style={{textAlign:"center",padding:"10px 12px",background:disponibles>0?"#E1F5EE":G.g100,borderRadius:8}}>
+                <div style={{fontSize:10,color:G.g500,textTransform:"uppercase",marginBottom:3,letterSpacing:".4px"}}>Disponibles</div>
+                <div style={{fontSize:22,fontWeight:700,color:disponibles>0?"#0F6E56":G.g500}}>{disponibles}</div>
               </div>
             </div>
             <div className="tw"><table>
@@ -1952,8 +1958,8 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
       <div className="sg mb4">
         <div className="sc grn"><span className="si">💰</span><span className="sl">Total Ingresos</span><span className="sv">{fmt$(totalVentas)}</span></div>
         <div className="sc"><span className="si">🐷</span><span className="sl">Venta Lechones</span><span className="sv">{fmt$(ventas.filter(v=>!v.tipo||v.tipo==="Lechon").reduce((s,v)=>s+Number(v.total),0))}</span><span className="str">{ventas.filter(v=>v.tipo!=="transferencia"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0)} vendidos</span></div>
-        <div className="sc"><span className="si">🐄</span><span className="sl">Venta Cerdas</span><span className="sv" style={{fontSize:18}}>{fmt$(ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+Number(v.total),0))}</span></div>
-        <div className="sc"><span className="si">🐗</span><span className="sl">Ingresos Monta</span><span className="sv" style={{fontSize:18}}>{fmt$(ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+Number(v.total),0))}</span></div>
+        <div className="sc"><span className="si">🐄</span><span className="sl">Venta Cerdas</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+Number(v.total),0))}</span></div>
+        <div className="sc"><span className="si">🐗</span><span className="sl">Ingresos Monta</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+Number(v.total),0))}</span></div>
       </div>
       <div className="card">
         <div className="card-h"><h3>🤝 Ventas de Lechones</h3></div>
