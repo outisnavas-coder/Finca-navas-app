@@ -196,7 +196,7 @@ const PERMS={
   // Finanzas
   registrarGastos: r=>["admin","socio","supervisor"].includes(r),
   registrarIngresos:r=>["admin","socio"].includes(r),
-  verMontos:       r=>["admin","socio"].includes(r),
+  verMontos:       r=>["admin","socio","supervisor"].includes(r),
 
   // Cerdos — operaciones
   editarCerdas:    r=>["admin","socio"].includes(r),
@@ -405,6 +405,21 @@ function RRLogo({size=32,color="#C9A84C"}){
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function Login({onLogin}){
   const [email,setEmail]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[loading,setLoading]=useState(false);
+  const [modo,setModo]=useState("login"); // login | nueva_pass
+  const [nuevaPass,setNuevaPass]=useState(""),[nuevaPass2,setNuevaPass2]=useState("");
+  const [passOk,setPassOk]=useState(false);
+
+  // Detectar si viene de link de invitación o reset
+  useEffect(()=>{
+    const hash=window.location.hash;
+    if(hash.includes("type=invite")||hash.includes("type=recovery")){
+      setModo("nueva_pass");
+      // Supabase procesa el token del hash automáticamente
+      supabase.auth.getSession().then(({data:{session}})=>{
+        if(session)setPassOk(true);
+      });
+    }
+  },[]);
 
   const go=async e=>{
     e.preventDefault();
@@ -419,6 +434,43 @@ function Login({onLogin}){
     }catch(e){setErr("Error de conexión. Verifica tu internet.");}
     setLoading(false);
   };
+
+  const guardarPass=async e=>{
+    e.preventDefault();
+    if(nuevaPass.length<6){setErr("La contraseña debe tener al menos 6 caracteres");return;}
+    if(nuevaPass!==nuevaPass2){setErr("Las contraseñas no coinciden");return;}
+    setLoading(true);setErr("");
+    const{data,error}=await supabase.auth.updateUser({password:nuevaPass});
+    if(error){setErr(error.message);setLoading(false);return;}
+    // Login automático después de crear contraseña
+    let perfil=null;
+    try{const {data:p}=await supabase.from("perfiles").select("*").eq("id",data.user.id).single();perfil=p;}catch(e){}
+    setLoading(false);
+    onLogin({...data.user,perfil});
+  };
+
+  if(modo==="nueva_pass") return <div className="login-screen"><div className="login-card">
+    <div className="login-logo">
+      <div className="login-emb"><img src="/Logo.png" style={{width:72,height:72,objectFit:"contain"}}/></div>
+      <h1>Gosh Investment</h1>
+      <p>Crea tu contraseña de acceso</p>
+    </div>
+    {!passOk&&<div className="linfo" style={{background:"#FEF2F2",color:G.red,borderColor:G.red}}>⏳ Procesando invitación...</div>}
+    {err&&<div className="lerr">{err}</div>}
+    {passOk&&<form onSubmit={guardarPass}>
+      <div className="fgrp mb4">
+        <label>Nueva Contraseña</label>
+        <input type="password" placeholder="Mínimo 6 caracteres" value={nuevaPass} onChange={e=>{setNuevaPass(e.target.value);setErr("");}} autoFocus/>
+      </div>
+      <div className="fgrp mb4">
+        <label>Confirmar Contraseña</label>
+        <input type="password" placeholder="Repite la contraseña" value={nuevaPass2} onChange={e=>{setNuevaPass2(e.target.value);setErr("");}}/>
+      </div>
+      <button type="submit" className="btn btn-p" style={{width:"100%",justifyContent:"center",padding:"11px"}} disabled={loading||!passOk}>
+        {loading?"Guardando...":"Crear Contraseña y Entrar"}
+      </button>
+    </form>}
+  </div></div>;
 
   return <div className="login-screen"><div className="login-card">
     <div className="login-logo">
@@ -2243,10 +2295,13 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
         </div>;
       })()}
       <div className="sg mb4">
-        <div className="sc grn"><span className="si">💰</span><span className="sl">Total Ingresos</span><span className="sv">{fmt$(totalVentas)}</span></div>
-        <div className="sc"><span className="si">🐷</span><span className="sl">Venta Lechones</span><span className="sv">{fmt$(ventas.filter(v=>!v.tipo||v.tipo==="Lechon").reduce((s,v)=>s+Number(v.total),0))}</span><span className="str">{ventas.filter(v=>v.tipo!=="transferencia"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0)} vendidos</span></div>
-        <div className="sc"><span className="si">🐄</span><span className="sl">Venta Cerdas</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+Number(v.total),0))}</span></div>
-        <div className="sc"><span className="si">🐗</span><span className="sl">Ingresos Monta</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+Number(v.total),0))}</span></div>
+        {PERMS.verMontos(role)&&<div className="sc grn"><span className="si">💰</span><span className="sl">Total Ingresos</span><span className="sv">{fmt$(totalVentas)}</span></div>}
+        <div className="sc"><span className="si">🐷</span><span className="sl">Venta Lechones</span>
+          {PERMS.verMontos(role)&&<span className="sv">{fmt$(ventas.filter(v=>!v.tipo||v.tipo==="Lechon").reduce((s,v)=>s+Number(v.total),0))}</span>}
+          <span className="str">{ventas.filter(v=>v.tipo!=="transferencia"&&v.estatus!=="Abono").reduce((s,v)=>s+v.cantidad,0)} vendidos</span>
+        </div>
+        {PERMS.verMontos(role)&&<div className="sc"><span className="si">🐄</span><span className="sl">Venta Cerdas</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Cerda").reduce((s,v)=>s+Number(v.total),0))}</span></div>}
+        {PERMS.verMontos(role)&&<div className="sc"><span className="si">🐗</span><span className="sl">Ingresos Monta</span><span className="sv">{fmt$(ventas.filter(v=>v.tipo==="Monta").reduce((s,v)=>s+Number(v.total),0))}</span></div>}
       </div>
         <div className="card">
         <div className="card-h"><h3>🤝 Ventas de Lechones</h3></div>
@@ -2257,7 +2312,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
             <td><span className={`badge ${v.tipo==="Cerda"?"br":v.tipo==="Monta"?"bb":v.tipo==="transferencia"?"bo":"bg"}`}>{v.tipo==="transferencia"?"Transfer":v.tipo||"Lechon"}</span></td>
             <td><span className={`badge ${v.estatus==="Abono"?"bo":v.estatus==="Cancelacion"?"bg":"bk"}`}>{v.estatus||"Venta"}</span></td>
             <td style={{fontWeight:700,color:v.estatus==="Abono"?G.g500:G.deep}}>{v.estatus==="Abono"?"-":v.cantidad}</td>
-            <td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>
+            {PERMS.verMontos(role)&&<td style={{fontWeight:700,color:G.deep}}>{fmt$(v.total)}</td>}
             <td className="hide-mobile">{v.comprador||"-"}</td><td className="hide-mobile"><span className="badge bk">{v.forma_pago||"-"}</span></td>
             <td className="hide-mobile" style={{fontSize:12,color:G.g500}}>{v.notas||"-"}</td>
             {PERMS.eliminar(role)&&<td style={{display:"flex",gap:4}}>
