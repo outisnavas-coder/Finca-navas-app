@@ -657,7 +657,7 @@ function Finanzas({gastos,ingresos,onRefresh,role,toast}){
         <div className="fgrp"><label>Descripción</label><input value={form.descripcion||""} onChange={e=>setForm(f=>({...f,descripcion:e.target.value}))}/></div>
         <div className="fgrp"><label>Monto ($)</label><input type="number" step="0.01" value={form.monto||""} onChange={e=>setForm(f=>({...f,monto:e.target.value}))}/></div>
         <div className="fgrp"><label>Módulo</label><select value={form.modulo||""} onChange={e=>setForm(f=>({...f,modulo:e.target.value}))}><option value="">Seleccionar...</option><option>Cerdos</option><option>Ñame</option><option>General</option></select></div>
-        {tipo==="gasto"&&<><div className="fgrp"><label>Pagado por</label><select value={form.pagado_por||""} onChange={e=>setForm(f=>({...f,pagado_por:e.target.value}))}><option value="">Seleccionar...</option><option>Roberto</option><option>Richard</option><option>Puercos</option></select></div>
+        {tipo==="gasto"&&<><div className="fgrp"><label>Pagado por</label><select value={form.pagado_por||""} onChange={e=>setForm(f=>({...f,pagado_por:e.target.value}))}><option value="">Seleccionar...</option><option>Roberto</option><option>Richard</option><option>Puercos</option><option>Ñames</option></select></div>
         <div className="fgrp"><label>Soporte / Comprobante</label><input value={form.soporte||""} onChange={e=>setForm(f=>({...f,soporte:e.target.value}))}/></div></>}
       </div>
       <div className="fl gap2 mt4">
