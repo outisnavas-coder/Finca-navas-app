@@ -4,19 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#1B2035">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Gosh">
+    <meta name="description" content="Sistema de Gestión GOSH · Panamá">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/Logo.png" />
+    <link rel="apple-touch-icon" href="/Logo.png">
+    <title>Gosh Investment</title>
     <style>
-      html, body, #root { 
-        background: #F7F5F0 !important; 
+      html, body, #root {
+        background: #F7F5F0 !important;
         color: #111118 !important;
         color-scheme: light !important;
         min-height: 100vh;
       }
     </style>
-    <title>Gosh Investment</title>
-    <link rel="icon" href="/Logo.png" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW registrado:', reg.scope))
+            .catch(err => console.log('SW error:', err));
+        });
+      }
+    </script>
   </body>
 </html>
