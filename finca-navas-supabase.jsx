@@ -2939,22 +2939,45 @@ export default function App(){
     check();window.addEventListener("resize",check);return()=>window.removeEventListener("resize",check);
   },[]);
 
-  // Auth check
+  const [authLoading,setAuthLoading]=useState(true);
+
+  // Auth check — manejo robusto de sesión
   useEffect(()=>{
-    if(!isConfigured)return;
-    supabase.auth.getSession().then(async({data:{session}})=>{
-      if(session){
+    if(!isConfigured){setAuthLoading(false);return;}
+    let mounted=true;
+
+    const loadUser=async(session)=>{
+      if(!session){if(mounted){setUser(null);setAuthLoading(false);}return;}
+      try{
         const {data:perfil}=await supabase.from("perfiles").select("*").eq("id",session.user.id).single();
-        setUser({...session.user,perfil});
+        if(mounted)setUser({...session.user,perfil});
+      }catch(e){
+        if(mounted)setUser({...session.user,perfil:null});
+      }finally{
+        if(mounted)setAuthLoading(false);
       }
+    };
+
+    // Intentar recuperar sesión existente
+    supabase.auth.getSession().then(({data:{session},error})=>{
+      if(error||!session){setUser(null);setAuthLoading(false);return;}
+      loadUser(session);
     });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange(async(_,session)=>{
-      if(session){
-        const {data:perfil}=await supabase.from("perfiles").select("*").eq("id",session.user.id).single();
-        setUser({...session.user,perfil});
-      } else setUser(null);
+
+    // Escuchar cambios de auth — incluyendo token refresh automático
+    const {data:{subscription}}=supabase.auth.onAuthStateChange(async(event,session)=>{
+      if(event==="SIGNED_OUT"||event==="USER_DELETED"){
+        if(mounted){setUser(null);setAuthLoading(false);}
+        return;
+      }
+      if(event==="TOKEN_REFRESHED"||event==="SIGNED_IN"){
+        loadUser(session);
+        return;
+      }
+      if(!session&&mounted){setUser(null);setAuthLoading(false);}
     });
-    return()=>subscription.unsubscribe();
+
+    return()=>{mounted=false;subscription.unsubscribe();};
   },[]);
 
   const fetchAll=useCallback(async()=>{
@@ -3033,6 +3056,7 @@ export default function App(){
   const totG2026=(dashAnio==="todo"?gastos:gastos.filter(g=>g.anio===dashAnio)).reduce((s,g)=>s+Number(g.monto),0);
   const totI2026=(dashAnio==="todo"?ingresos:ingresos.filter(i=>i.anio===dashAnio)).reduce((s,i)=>s+Number(i.monto),0);
 
+  if(authLoading)return <div className="loading"><div className="spinner"></div><span>Verificando sesión...</span></div>;
   if(!user)return<><style>{CSS}</style>{!isConfigured&&<div style={{position:"fixed",top:0,left:0,right:0,zIndex:999,background:G.goldL,borderBottom:`1px solid ${G.gold}`,padding:"8px 20px",fontSize:13,color:G.gold}}><strong>⚙️ Modo demo</strong> — Configura SUPABASE_URL y SUPABASE_ANON_KEY en el código para activar la base de datos real</div>}<Login onLogin={setUser}/></>;
 
   return<>
