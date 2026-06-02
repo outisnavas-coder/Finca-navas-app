@@ -1694,6 +1694,10 @@ function CerdosModule({role,toast,userId,userName,onRefreshAll}){
       const {error}=await supabase.from(tabla).delete().eq("id",id);
       if(error)toast(error.message,"error");
       else{
+        // Si era una venta porcina, limpiar ingreso vinculado en finanzas
+        if(tabla==="ventas_lechones"){
+          await supabase.from("ingresos").delete().eq("venta_id",id);
+        }
         await logAudit({userId,userName,accion:"eliminar",tabla,registroId:id});
         toast("Eliminado ✓");
         await fetchPorcino(false);
@@ -1703,32 +1707,64 @@ function CerdosModule({role,toast,userId,userName,onRefreshAll}){
   };
 
   // Sincronizar venta con tabla ingresos
+  // Regla: Abonos NO generan ingreso (pagos parciales pendientes)
+  // Regla: Abono→Venta crea ingreso; Venta→Abono borra ingreso
   const syncIngreso=async(venta,ventaId,accion="insertar")=>{
     try{
+      // GUARD: Abonos nunca sincronizan como ingreso
+      if(venta.estatus==="Abono"){
+        if(accion==="actualizar"&&ventaId){
+          await supabase.from("ingresos").delete().eq("venta_id",ventaId);
+        }
+        return;
+      }
       const fecha=venta.fecha;
       const dt=new Date(fecha+"T12:00:00");
       const cat=venta.tipo==="Cerda"?"Ingresos por ventas (Cerdas Madres)":
                 venta.tipo==="Monta"?"Ingresos por Monta":"Ingresos por ventas (Lechones)";
       const desc=`Venta ${venta.cantidad||1} ${venta.tipo||"lechón(es)"} – ${venta.comprador||""} – ${venta.notas||""}`.trim().replace(/–\s*$/,"");
+      const monto=Number(venta.total||venta.precio_unit*venta.cantidad||0);
       if(accion==="insertar"){
         await supabase.from("ingresos").insert({
           fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
           categoria:cat,descripcion:desc,
-          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
-          modulo:"Cerdos",venta_id:ventaId
+          monto,modulo:"Cerdos",venta_id:ventaId
         });
       } else if(accion==="actualizar"&&ventaId){
-        await supabase.from("ingresos").update({
-          fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
-          categoria:cat,descripcion:desc,
-          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
-        }).eq("venta_id",ventaId);
+        // Si ya existe el ingreso actualizar; si no (venía de Abono→Venta) insertar
+        const{data:existing}=await supabase.from("ingresos").select("id").eq("venta_id",ventaId).maybeSingle();
+        if(existing){
+          await supabase.from("ingresos").update({
+            fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
+            categoria:cat,descripcion:desc,monto,
+          }).eq("venta_id",ventaId);
+        } else {
+          await supabase.from("ingresos").insert({
+            fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
+            categoria:cat,descripcion:desc,
+            monto,modulo:"Cerdos",venta_id:ventaId
+          });
+        }
       }
     }catch(e){console.warn("syncIngreso error:",e.message);}
   };
 
   const openEdit=(tipo,item)=>{setEditItem({tipo,...item});setForm({...item});setModal("edit_"+tipo);};
-  const openNew=(tipo,defaults={})=>{setForm({...defaults});setModal("new_"+tipo);};
+
+  // Genera el próximo código de cerda en formato C-001, C-002, ...
+  const nextCodigoCerda=()=>{
+    const nums=cerdas
+      .map(c=>{ const m=(c.codigo||"").match(/^C-(\d+)$/i); return m?parseInt(m[1],10):0; })
+      .filter(n=>n>0);
+    const next=nums.length>0?Math.max(...nums)+1:1;
+    return "C-"+String(next).padStart(3,"0");
+  };
+
+  const openNew=(tipo,defaults={})=>{
+    const extra=tipo==="cerda"?{codigo:nextCodigoCerda()}:{};
+    setForm({...extra,...defaults});
+    setModal("new_"+tipo);
+  };
 
   if(loading)return <Loading msg="Cargando datos porcinos..." onRetry={()=>fetchPorcino()}/>;
 
