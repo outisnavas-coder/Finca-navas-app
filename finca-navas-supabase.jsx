@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 // 👇 Reemplaza con tus credenciales de Supabase
@@ -859,7 +860,6 @@ function Reportes({gastos,ingresos}){
     const balHist=tIHist-tGHist;
     const roiMes=tGMes>0?((tIMes/tGMes-1)*100).toFixed(2):0;
     const roiHist=tGHist>0?((tIHist/tGHist-1)*100).toFixed(2):0;
-
     const catIngMes={};iMes.forEach(x=>{catIngMes[x.categoria]=(catIngMes[x.categoria]||0)+Number(x.monto);});
     const catGasMes={};gMes.forEach(x=>{catGasMes[x.categoria]=(catGasMes[x.categoria]||0)+Number(x.monto);});
     const catIngHist={};ingresos.forEach(x=>{catIngHist[x.categoria]=(catIngHist[x.categoria]||0)+Number(x.monto);});
@@ -869,77 +869,110 @@ function Reportes({gastos,ingresos}){
     const socHist={Roberto:0,Richard:0,Puercos:0,"Ñames":0};
     gastos.forEach(g=>{if(g.pagado_por&&socHist[g.pagado_por]!==undefined)socHist[g.pagado_por]+=Number(g.monto);});
 
-    const esc=v=>`"${String(v).replace(/"/g,'\"')}"`;
-    const rows=[];
-    rows.push(["FINCA NAVAS — INFORME EJECUTIVO DE CIERRE"]);
-    rows.push([`Período: ${mesLabel}`]);
-    rows.push([`Generado: ${hoy.toLocaleDateString("es-PA")}`]);
-    rows.push([]);
-    // KPIs período
-    rows.push(["=== RESUMEN "+mesLabel.toUpperCase()+" ==="]);
-    rows.push(["Concepto","Monto"]);
-    rows.push(["Ingresos",tIMes]);
-    rows.push(["Gastos",tGMes]);
-    rows.push(["Balance",balMes]);
-    rows.push(["ROI (%)",roiMes]);
-    rows.push([]);
-    // P&L Período
-    rows.push(["=== P&L "+mesLabel.toUpperCase()+" ==="]);
-    rows.push(["Categoría","Tipo","Monto"]);
-    Object.entries(catIngMes).forEach(([c,v])=>rows.push([c,"Ingreso",v]));
-    rows.push(["TOTAL INGRESOS","",tIMes]);
-    Object.entries(catGasMes).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>rows.push([c,"Gasto",v]));
-    rows.push(["TOTAL GASTOS","",tGMes]);
-    rows.push(["RESULTADO NETO","",balMes]);
-    rows.push([]);
-    // KPIs histórico
-    rows.push(["=== RESUMEN HISTÓRICO ACUMULADO ==="]);
-    rows.push(["Concepto","Monto"]);
-    rows.push(["Ingresos Histórico",tIHist]);
-    rows.push(["Gastos Histórico",tGHist]);
-    rows.push(["Balance Histórico",balHist]);
-    rows.push(["ROI Histórico (%)",roiHist]);
-    rows.push([]);
-    // P&L Histórico
-    rows.push(["=== P&L HISTÓRICO COMPLETO ==="]);
-    rows.push(["Categoría","Tipo","Monto"]);
-    Object.entries(catIngHist).forEach(([c,v])=>rows.push([c,"Ingreso",v]));
-    rows.push(["TOTAL INGRESOS","",tIHist]);
-    Object.entries(catGasHist).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>rows.push([c,"Gasto",v]));
-    rows.push(["TOTAL GASTOS","",tGHist]);
-    rows.push(["RESULTADO NETO","",balHist]);
-    rows.push([]);
-    // Comparativo
-    if(mes){
-      rows.push(["=== COMPARATIVO: "+mesLabel.toUpperCase()+" vs HISTÓRICO ==="]);
-      rows.push(["Concepto",mesLabel,"Histórico","Diferencia"]);
-      rows.push(["Ingresos",tIMes,tIHist,tIMes-tIHist]);
-      rows.push(["Gastos",tGMes,tGHist,tGMes-tGHist]);
-      rows.push(["Balance",balMes,balHist,balMes-balHist]);
-      rows.push(["ROI (%)",roiMes,roiHist,(Number(roiMes)-Number(roiHist)).toFixed(2)]);
-      rows.push([]);
-    }
-    // Socios
-    rows.push(["=== APORTACIONES POR SOCIO / NEGOCIO ==="]);
-    rows.push(["Fuente",mesLabel,"Histórico"]);
-    Object.entries(socHist).forEach(([s,vh])=>rows.push([s,socMes[s]||0,vh]));
-    rows.push([]);
-    // Detalle gastos
-    rows.push(["=== DETALLE GASTOS "+mesLabel.toUpperCase()+" ==="]);
-    rows.push(["Fecha","Categoría","Descripción","Módulo","Pagado por","Monto"]);
-    gMes.forEach(g=>rows.push([g.fecha,g.categoria,g.descripcion||"—",g.modulo||"—",g.pagado_por||"—",Number(g.monto)]));
-    rows.push([]);
-    // Detalle ingresos
-    rows.push(["=== DETALLE INGRESOS "+mesLabel.toUpperCase()+" ==="]);
-    rows.push(["Fecha","Categoría","Descripción","Módulo","Monto"]);
-    iMes.forEach(i=>rows.push([i.fecha,i.categoria,i.descripcion||"—",i.modulo||"—",Number(i.monto)]));
+    const wb=XLSX.utils.book_new();
 
-    const csv="\uFEFF"+rows.map(r=>r.map(c=>typeof c==="number"?c:esc(c||"\u2014")).join(",")).join("\n");
-    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url;a.download=`FincaNavas_Cierre_${mesLabel.replace(" ","_")}.csv`;
-    a.click();URL.revokeObjectURL(url);
+    // ── HOJA 1: RESUMEN ──────────────────────────────────────────────────────
+    const wsResumen=[];
+    wsResumen.push(["FINCA NAVAS — INFORME EJECUTIVO DE CIERRE",""]);
+    wsResumen.push([`Período: ${mesLabel}`,""]);
+    wsResumen.push([`Generado: ${hoy.toLocaleDateString("es-PA")}`,""]);
+    wsResumen.push(["",""]);
+    wsResumen.push(["RESUMEN — "+mesLabel.toUpperCase(),""]);
+    wsResumen.push(["Concepto","Monto ($)"]);
+    wsResumen.push(["Ingresos",tIMes]);
+    wsResumen.push(["Gastos",tGMes]);
+    wsResumen.push(["Balance",balMes]);
+    wsResumen.push(["ROI (%)",Number(roiMes)]);
+    wsResumen.push(["",""]);
+    if(mes){
+      wsResumen.push(["COMPARATIVO: "+mesLabel.toUpperCase()+" vs HISTÓRICO",""]);
+      wsResumen.push(["Concepto",mesLabel,"Histórico","Diferencia"]);
+      wsResumen.push(["Ingresos",tIMes,tIHist,tIMes-tIHist]);
+      wsResumen.push(["Gastos",tGMes,tGHist,tGMes-tGHist]);
+      wsResumen.push(["Balance",balMes,balHist,balMes-balHist]);
+      wsResumen.push(["ROI (%)",Number(roiMes),Number(roiHist),""]);
+      wsResumen.push(["",""]);
+    }
+    wsResumen.push(["APORTACIONES POR SOCIO / NEGOCIO",""]);
+    wsResumen.push(["Fuente",mesLabel,"Histórico"]);
+    Object.entries(socHist).forEach(([s,vh])=>wsResumen.push([s,socMes[s]||0,vh]));
+    const shResumen=XLSX.utils.aoa_to_sheet(wsResumen);
+    shResumen["!cols"]=[{wch:38},{wch:16},{wch:16},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,shResumen,"Resumen");
+
+    // ── HOJA 2: P&L ──────────────────────────────────────────────────────────
+    const wsPL=[];
+    wsPL.push(["ESTADO DE RESULTADOS (P&L) — "+mesLabel.toUpperCase()]);
+    wsPL.push([""]);
+    wsPL.push(["Concepto","Tipo","Monto ($)"]);
+    Object.entries(catIngMes).forEach(([c,v])=>wsPL.push([c,"Ingreso",v]));
+    wsPL.push(["TOTAL INGRESOS","",tIMes]);
+    wsPL.push([""]);
+    Object.entries(catGasMes).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>wsPL.push([c,"Gasto",v]));
+    wsPL.push(["TOTAL GASTOS","",tGMes]);
+    wsPL.push([""]);
+    wsPL.push(["RESULTADO NETO","",balMes]);
+    if(mes){
+      wsPL.push([""]);
+      wsPL.push(["P&L HISTÓRICO COMPLETO"]);
+      wsPL.push([""]);
+      wsPL.push(["Concepto","Tipo","Monto ($)"]);
+      Object.entries(catIngHist).forEach(([c,v])=>wsPL.push([c,"Ingreso",v]));
+      wsPL.push(["TOTAL INGRESOS","",tIHist]);
+      wsPL.push([""]);
+      Object.entries(catGasHist).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>wsPL.push([c,"Gasto",v]));
+      wsPL.push(["TOTAL GASTOS","",tGHist]);
+      wsPL.push([""]);
+      wsPL.push(["RESULTADO NETO HISTÓRICO","",balHist]);
+    }
+    const shPL=XLSX.utils.aoa_to_sheet(wsPL);
+    shPL["!cols"]=[{wch:42},{wch:12},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,shPL,"P&L");
+
+    // ── HOJA 3: DETALLE GASTOS ────────────────────────────────────────────────
+    const wsGastos=[["DETALLE DE GASTOS — "+mesLabel.toUpperCase()],[""],
+      ["Fecha","Categoría","Descripción","Módulo","Pagado por","Monto ($)"]];
+    gMes.slice().sort((a,b)=>a.fecha>b.fecha?-1:1)
+        .forEach(g=>wsGastos.push([g.fecha,g.categoria,g.descripcion||"—",g.modulo||"—",g.pagado_por||"—",Number(g.monto)]));
+    wsGastos.push(["","","","","TOTAL",tGMes]);
+    const shGastos=XLSX.utils.aoa_to_sheet(wsGastos);
+    shGastos["!cols"]=[{wch:12},{wch:32},{wch:40},{wch:12},{wch:14},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,shGastos,"Detalle Gastos");
+
+    // ── HOJA 4: DETALLE INGRESOS ──────────────────────────────────────────────
+    const wsIngresos=[["DETALLE DE INGRESOS — "+mesLabel.toUpperCase()],[""],
+      ["Fecha","Categoría","Descripción","Módulo","Monto ($)"]];
+    iMes.slice().sort((a,b)=>a.fecha>b.fecha?-1:1)
+        .forEach(i=>wsIngresos.push([i.fecha,i.categoria,i.descripcion||"—",i.modulo||"—",Number(i.monto)]));
+    wsIngresos.push(["","","","TOTAL",tIMes]);
+    const shIngresos=XLSX.utils.aoa_to_sheet(wsIngresos);
+    shIngresos["!cols"]=[{wch:12},{wch:32},{wch:40},{wch:12},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,shIngresos,"Detalle Ingresos");
+
+    // ── HOJA 5: DATOS PARA GRÁFICOS ───────────────────────────────────────────
+    const mesesConDatos=[...new Set([...gastos,...ingresos].map(x=>x.anio*100+x.mes))].sort();
+    const wsChart=[["Evolución Mensual — Datos para Gráficos"],[""],
+      ["Mes","Ingresos ($)","Gastos ($)","Balance ($)"]];
+    mesesConDatos.forEach(ym=>{
+      const y=Math.floor(ym/100),m=ym%100;
+      const etiq=`${MESES_FULL[m]} ${y}`;
+      const ing=ingresos.filter(x=>x.anio===y&&x.mes===m).reduce((s,x)=>s+Number(x.monto),0);
+      const gas=gastos.filter(x=>x.anio===y&&x.mes===m).reduce((s,x)=>s+Number(x.monto),0);
+      wsChart.push([etiq,ing,gas,ing-gas]);
+    });
+    wsChart.push([""]);
+    wsChart.push(["Distribución Gastos (Histórico)",""]);
+    wsChart.push(["Categoría","Monto ($)"]);
+    Object.entries(catGasHist).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>wsChart.push([c,v]));
+    wsChart.push([""]);
+    wsChart.push(["Distribución Ingresos (Histórico)",""]);
+    wsChart.push(["Categoría","Monto ($)"]);
+    Object.entries(catIngHist).forEach(([c,v])=>wsChart.push([c,v]));
+    const shChart=XLSX.utils.aoa_to_sheet(wsChart);
+    shChart["!cols"]=[{wch:20},{wch:14},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,shChart,"Datos Gráficos");
+
+    XLSX.writeFile(wb,`FincaNavas_Cierre_${mesLabel.replace(/ /g,"_")}.xlsx`);
   };
 
   return <div>
