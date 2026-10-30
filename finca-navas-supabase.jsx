@@ -1786,30 +1786,6 @@ function CerdosModule({role,toast,userId,userName,onRefreshAll}){
     }catch(e){toast(e.message,"error");}
   };
 
-  // Sincronizar venta con tabla ingresos
-  const syncIngreso=async(venta,ventaId,accion="insertar")=>{
-    try{
-      const fecha=venta.fecha;
-      const dt=new Date(fecha+"T12:00:00");
-      const cat=venta.tipo==="Cerda"?"Ingresos por ventas (Cerdas Madres)":
-                venta.tipo==="Monta"?"Ingresos por Monta":"Ingresos por ventas (Lechones)";
-      const desc=`Venta ${venta.cantidad||1} ${venta.tipo||"lechón(es)"} – ${venta.comprador||""} – ${venta.notas||""}`.trim().replace(/–\s*$/,"");
-      if(accion==="insertar"){
-        await supabase.from("ingresos").insert({
-          fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
-          categoria:cat,descripcion:desc,
-          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
-          modulo:"Cerdos",venta_id:ventaId
-        });
-      } else if(accion==="actualizar"&&ventaId){
-        await supabase.from("ingresos").update({
-          fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
-          categoria:cat,descripcion:desc,
-          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
-        }).eq("venta_id",ventaId);
-      }
-    }catch(e){console.warn("syncIngreso error:",e.message);}
-  };
 
   const openEdit=(tipo,item)=>{setEditItem({tipo,...item});setForm({...item});setModal("edit_"+tipo);};
   const openNew=(tipo,defaults={})=>{setForm({...defaults});setModal("new_"+tipo);};
@@ -2647,7 +2623,7 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
               const total=Number(form.precio_unit)*Number(form.cantidad);
               const datos={fecha:form.fecha,cantidad:Number(form.cantidad),precio_unit:Number(form.precio_unit),comprador:form.comprador,forma_pago:form.forma_pago,notas:form.notas||"",tipo:form.tipo||"Lechon",estatus:form.estatus||"Venta"};
               await updateRow("ventas_lechones",id,datos);
-              await syncIngreso({...datos,total},id,"actualizar");
+              if(onRefreshAll)onRefreshAll(); // el ingreso lo actualiza el trigger de la base de datos
             }}>{saving?"Guardando...":"Guardar cambios"}</button>
           :<button className="btn btn-p" disabled={saving} onClick={async()=>{
               const total=Number(form.precio_unit)*Number(form.cantidad);
@@ -2658,7 +2634,6 @@ return d.getTime()+(d.getHours()===0&&d.getTimezoneOffset()!==0?12*3600000:0);}r
                 const newId=crypto.randomUUID();
                 const{error}=await supabase.from("ventas_lechones").insert({id:newId,...datosInsert});
                 if(error){toast(error.message,"error");return;}
-                await syncIngreso({...datosInsert,total},newId,"insertar");
                 await logAudit({userId,userName,accion:"insertar",tabla:"ventas_lechones",registroId:newId,datosNuevos:datosInsert});
                 toast("Venta guardada ✓");
                 await fetchPorcino(false);
