@@ -684,7 +684,7 @@ function Finanzas({gastos,ingresos,onRefresh,role,toast,userId,userName}){
     if(error){toast(error.message,"error");}else{toast(`${tipo==="gasto"?"Gasto":"Ingreso"} guardado ✓`);setModal(null);setForm({});onRefresh();}
   };
 
-  const CATSGAS=["Alimento (Crecimiento)","Alimento (Gestación)","Alimento (Lactancia)","Veterinario y Insumos Medicos","Gastos de Parto","Compra de Lechones (Madres New y Verracos)","Infraestructura","Semilla","Mozos","Supervision de proyecto","Herramientas","Quimicos (Fertilizantes - Pestecidas)","Arado Mecanizado","Otro"];
+  const CATSGAS=["Alimento","Veterinario y Insumos Medicos","Gastos de Parto","Compra de Lechones (Madres New y Verracos)","Infraestructura","Semilla","Mozos","Supervision de proyecto","Herramientas","Quimicos (Fertilizantes - Pestecidas)","Arado Mecanizado","Otro"];
   const CATSING=["Ingresos por ventas (Lechones)","Ingresos por ventas (Cerdas Madres)","Ingresos por Ñame","Otro"];
 
   return <div>
@@ -870,8 +870,11 @@ function Reportes({gastos,ingresos}){
   const MESES=["","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
   // ── P&L data ──
-  const CATS_GAS=["Alimento (Crecimiento)","Alimento (Gestación)","Alimento (Lactancia)","Veterinario y Insumos Medicos","Gastos de Parto","Compra de Lechones (Madres New y Verracos)","Infraestructura","Semilla","Mozos","Supervision de proyecto","Herramientas","Quimicos (Fertilizantes - Pestecidas)","Arado Mecanizado","Otro"];
-  const CATS_ING=["Ingresos por ventas (Lechones)","Ingresos por ventas (Cerdas Madres)","Ingresos por Ñame","Otro"];
+  const CATS_GAS_BASE=["Alimento","Veterinario y Insumos Medicos","Gastos de Parto","Compra de Lechones (Madres New y Verracos)","Infraestructura","Semilla","Mozos","Supervision de proyecto","Herramientas","Quimicos (Fertilizantes - Pestecidas)","Arado Mecanizado","Otro"];
+  const CATS_ING_BASE=["Ingresos por ventas (Lechones)","Ingresos por ventas (Cerdas Madres)","Ingresos por Ñame","Otro"];
+  // Catálogo + cualquier categoría presente en los datos: así ninguna línea desaparece del P&L
+  const CATS_GAS=[...new Set([...CATS_GAS_BASE,...gF.map(x=>x.categoria).filter(Boolean)])];
+  const CATS_ING=[...new Set([...CATS_ING_BASE,...iF.map(x=>x.categoria).filter(Boolean)])];
   const anosDisp=anio==="todos"?anos:[Number(anio)];
   const mesesDisp=Array.from({length:12},(_,i)=>i+1);
 
