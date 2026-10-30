@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 // 👇 Reemplaza con tus credenciales de Supabase
@@ -231,6 +230,69 @@ async function logAudit({userId,userName,accion,tabla,registroId,datosPrev=null,
       created_at:new Date().toISOString(),
     });
   }catch(e){console.warn("Audit log failed:",e.message);}
+}
+
+// ─── SOPORTES (Supabase Storage, bucket privado "soportes") ──────────────────
+// En la columna gastos.soporte se guarda "file:<ruta>". Cualquier otro valor
+// es texto histórico y se muestra tal cual.
+const SOPORTES_BUCKET="soportes";
+const SOPORTE_MAX_MB=5;
+const SOPORTE_TIPOS=["image/jpeg","image/png","image/webp","application/pdf"];
+
+async function comprimirImagen(file,maxDim=1600,quality=0.8){
+  if(!file.type.startsWith("image/"))return file;
+  try{
+    const bmp=await createImageBitmap(file);
+    const scale=Math.min(1,maxDim/Math.max(bmp.width,bmp.height));
+    const w=Math.round(bmp.width*scale),h=Math.round(bmp.height*scale);
+    const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+    canvas.getContext("2d").drawImage(bmp,0,0,w,h);
+    const blob=await new Promise(res=>canvas.toBlob(res,"image/jpeg",quality));
+    if(!blob)return file;
+    return new File([blob],file.name.replace(/\.[^.]+$/,"")+".jpg",{type:"image/jpeg"});
+  }catch(e){return file;}
+}
+
+async function subirSoporte(file,fecha){
+  if(!SOPORTE_TIPOS.includes(file.type))return{error:"Formato no permitido. Usa JPG, PNG, WEBP o PDF."};
+  const f=await comprimirImagen(file);
+  if(f.size>SOPORTE_MAX_MB*1024*1024)return{error:`El archivo supera ${SOPORTE_MAX_MB} MB.`};
+  const ext=f.type==="application/pdf"?"pdf":f.type==="image/png"?"png":f.type==="image/webp"?"webp":"jpg";
+  const [y,m]=(fecha||new Date().toISOString().slice(0,10)).split("-");
+  // Nombre aleatorio: no se usa el nombre original del archivo
+  const path=`gastos/${y}/${m}/${crypto.randomUUID()}.${ext}`;
+  const{error}=await supabase.storage.from(SOPORTES_BUCKET).upload(path,f,{contentType:f.type,upsert:false});
+  if(error)return{error:error.message};
+  return{path:`file:${path}`};
+}
+
+async function abrirSoporte(valor,toast){
+  if(!valor||!valor.startsWith("file:"))return;
+  const{data,error}=await supabase.storage.from(SOPORTES_BUCKET).createSignedUrl(valor.slice(5),120);
+  if(error||!data?.signedUrl){toast("No se pudo abrir el soporte","error");return;}
+  window.open(data.signedUrl,"_blank","noopener");
+}
+
+// ─── RESPALDO (exporta todas las tablas a un JSON) ───────────────────────────
+const BACKUP_TABLAS=["gastos","ingresos","deudas","inventario","cerdas","partos","celos_montas","vacunas_cerdas","ventas_lechones","protocolo_partos","siembras","actividades_name","perfiles","auditoria"];
+
+async function exportarRespaldo(onProgress){
+  const out={meta:{app:"Gosh Investment",generado:new Date().toISOString(),version:1},tablas:{}};
+  const PAGE=1000;
+  for(const t of BACKUP_TABLAS){
+    onProgress&&onProgress(t);
+    let rows=[],from=0;
+    while(true){
+      let q=await supabase.from(t).select("*").order("id").range(from,from+PAGE-1);
+      if(q.error)q=await supabase.from(t).select("*").range(from,from+PAGE-1); // tabla sin columna id
+      if(q.error)throw new Error(`${t}: ${q.error.message}`);
+      rows=rows.concat(q.data||[]);
+      if(!q.data||q.data.length<PAGE)break;
+      from+=PAGE;
+    }
+    out.tablas[t]=rows;
+  }
+  return out;
 }
 
 // ─── CALC ALERTAS ─────────────────────────────────────────────────────────────
@@ -588,7 +650,7 @@ function Dashboard({gastos,ingresos,onAnioChange}){
 }
 
 // ─── FINANZAS ─────────────────────────────────────────────────────────────────
-function Finanzas({gastos,ingresos,onRefresh,role,toast}){
+function Finanzas({gastos,ingresos,onRefresh,role,toast,userId,userName}){
   const [tab,setTab]=useState("todos");
   const [filtAnio,setFiltAnio]=useState("todos");
   const [filtMod,setFiltMod]=useState("todos");
@@ -606,9 +668,18 @@ function Finanzas({gastos,ingresos,onRefresh,role,toast}){
 
   const save=async tipo=>{
     setSaving(true);
-    const entry={fecha:form.fecha,categoria:form.categoria,descripcion:form.descripcion,monto:Number(form.monto),modulo:form.modulo,...(tipo==="gasto"?{pagado_por:form.pagado_por,soporte:form.soporte}:{})};
+    let soporte=null;
+    if(tipo==="gasto"&&form._file){
+      const r=await subirSoporte(form._file,form.fecha);
+      if(r.error){setSaving(false);toast(r.error,"error");return;}
+      soporte=r.path;
+    }
+    const id=crypto.randomUUID();
+    const entry={fecha:form.fecha,categoria:form.categoria,descripcion:form.descripcion,monto:Number(form.monto),modulo:form.modulo,...(tipo==="gasto"?{pagado_por:form.pagado_por,soporte}:{})};
     const tbl=tipo==="gasto"?"gastos":"ingresos";
-    const {error}=await supabase.from(tbl).insert(entry);
+    const {error}=await supabase.from(tbl).insert({id,...entry});
+    if(error&&soporte)await supabase.storage.from(SOPORTES_BUCKET).remove([soporte.slice(5)]); // no dejar archivo huérfano
+    if(!error)await logAudit({userId,userName,accion:tipo==="gasto"?"registrar_gasto":"insertar",tabla:tbl,registroId:id,datosNuevos:entry});
     setSaving(false);
     if(error){toast(error.message,"error");}else{toast(`${tipo==="gasto"?"Gasto":"Ingreso"} guardado ✓`);setModal(null);setForm({});onRefresh();}
   };
@@ -638,13 +709,18 @@ function Finanzas({gastos,ingresos,onRefresh,role,toast}){
     </div>
     <div className="card">
       <div className="tw"><table>
-        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Módulo</th><th>Pagado por</th><th>Tipo</th><th>Monto</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Módulo</th><th>Pagado por</th><th>Soporte</th><th>Tipo</th><th>Monto</th></tr></thead>
         <tbody>{shown.slice(0,100).map((r,i)=><tr key={i}>
           <td style={{whiteSpace:"nowrap"}}>{r.fecha}</td>
           <td style={{fontSize:12,maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.categoria}</td>
           <td style={{fontSize:12,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.descripcion}</td>
           <td><span className={`badge ${r.modulo==="Cerdos"?"bg":"bo"}`}>{r.modulo}</span></td>
           <td style={{fontSize:12}}>{r.pagado_por||"-"}</td>
+          <td>{r.tipo==="gasto"&&r.soporte
+            ?(r.soporte.startsWith("file:")
+              ?<button className="btn btn-o btn-sm" style={{padding:"2px 8px"}} onClick={()=>abrirSoporte(r.soporte,toast)}>📎</button>
+              :<span style={{fontSize:11,color:G.g500,maxWidth:90,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={r.soporte}>{r.soporte}</span>)
+            :""}</td>
           <td><span className={`badge ${r.tipo==="ingreso"?"bg":"br"}`}>{r.tipo==="ingreso"?"Ingreso":"Gasto"}</span></td>
           <td style={{fontWeight:700,color:r.tipo==="ingreso"?G.deep:G.red,whiteSpace:"nowrap"}}>{r.tipo==="ingreso"?"+":"-"}{fmt$(r.monto)}</td>
         </tr>)}</tbody>
@@ -659,7 +735,11 @@ function Finanzas({gastos,ingresos,onRefresh,role,toast}){
         <div className="fgrp"><label>Monto ($)</label><input type="number" step="0.01" value={form.monto||""} onChange={e=>setForm(f=>({...f,monto:e.target.value}))}/></div>
         <div className="fgrp"><label>Módulo</label><select value={form.modulo||""} onChange={e=>setForm(f=>({...f,modulo:e.target.value}))}><option value="">Seleccionar...</option><option>Cerdos</option><option>Ñame</option><option>General</option></select></div>
         {tipo==="gasto"&&<><div className="fgrp"><label>Pagado por</label><select value={form.pagado_por||""} onChange={e=>setForm(f=>({...f,pagado_por:e.target.value}))}><option value="">Seleccionar...</option><option>Roberto</option><option>Richard</option><option>Puercos</option><option>Ñames</option></select></div>
-        <div className="fgrp"><label>Soporte / Comprobante</label><input value={form.soporte||""} onChange={e=>setForm(f=>({...f,soporte:e.target.value}))}/></div></>}
+        <div className="fgrp"><label>Soporte / Comprobante</label>
+          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setForm(f=>({...f,_file:e.target.files&&e.target.files[0]||null}))}/>
+          {form._file&&<span style={{fontSize:11,color:G.g500,marginTop:4,display:"block"}}>{form._file.name} · {(form._file.size/1024/1024).toFixed(1)} MB{form._file.type.startsWith("image/")?" (se optimiza antes de subir)":""}</span>}
+          <span style={{fontSize:11,color:G.g500,marginTop:2,display:"block"}}>JPG, PNG, WEBP o PDF · máx. {SOPORTE_MAX_MB} MB</span>
+        </div></>}
       </div>
       <div className="fl gap2 mt4">
         <button className="btn btn-p" onClick={()=>save(tipo)} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
@@ -860,6 +940,7 @@ function Reportes({gastos,ingresos}){
     const balHist=tIHist-tGHist;
     const roiMes=tGMes>0?((tIMes/tGMes-1)*100).toFixed(2):0;
     const roiHist=tGHist>0?((tIHist/tGHist-1)*100).toFixed(2):0;
+
     const catIngMes={};iMes.forEach(x=>{catIngMes[x.categoria]=(catIngMes[x.categoria]||0)+Number(x.monto);});
     const catGasMes={};gMes.forEach(x=>{catGasMes[x.categoria]=(catGasMes[x.categoria]||0)+Number(x.monto);});
     const catIngHist={};ingresos.forEach(x=>{catIngHist[x.categoria]=(catIngHist[x.categoria]||0)+Number(x.monto);});
@@ -869,110 +950,77 @@ function Reportes({gastos,ingresos}){
     const socHist={Roberto:0,Richard:0,Puercos:0,"Ñames":0};
     gastos.forEach(g=>{if(g.pagado_por&&socHist[g.pagado_por]!==undefined)socHist[g.pagado_por]+=Number(g.monto);});
 
-    const wb=XLSX.utils.book_new();
-
-    // ── HOJA 1: RESUMEN ──────────────────────────────────────────────────────
-    const wsResumen=[];
-    wsResumen.push(["FINCA NAVAS — INFORME EJECUTIVO DE CIERRE",""]);
-    wsResumen.push([`Período: ${mesLabel}`,""]);
-    wsResumen.push([`Generado: ${hoy.toLocaleDateString("es-PA")}`,""]);
-    wsResumen.push(["",""]);
-    wsResumen.push(["RESUMEN — "+mesLabel.toUpperCase(),""]);
-    wsResumen.push(["Concepto","Monto ($)"]);
-    wsResumen.push(["Ingresos",tIMes]);
-    wsResumen.push(["Gastos",tGMes]);
-    wsResumen.push(["Balance",balMes]);
-    wsResumen.push(["ROI (%)",Number(roiMes)]);
-    wsResumen.push(["",""]);
+    const esc=v=>`"${String(v).replace(/"/g,'\"')}"`;
+    const rows=[];
+    rows.push(["FINCA NAVAS — INFORME EJECUTIVO DE CIERRE"]);
+    rows.push([`Período: ${mesLabel}`]);
+    rows.push([`Generado: ${hoy.toLocaleDateString("es-PA")}`]);
+    rows.push([]);
+    // KPIs período
+    rows.push(["=== RESUMEN "+mesLabel.toUpperCase()+" ==="]);
+    rows.push(["Concepto","Monto"]);
+    rows.push(["Ingresos",tIMes]);
+    rows.push(["Gastos",tGMes]);
+    rows.push(["Balance",balMes]);
+    rows.push(["ROI (%)",roiMes]);
+    rows.push([]);
+    // P&L Período
+    rows.push(["=== P&L "+mesLabel.toUpperCase()+" ==="]);
+    rows.push(["Categoría","Tipo","Monto"]);
+    Object.entries(catIngMes).forEach(([c,v])=>rows.push([c,"Ingreso",v]));
+    rows.push(["TOTAL INGRESOS","",tIMes]);
+    Object.entries(catGasMes).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>rows.push([c,"Gasto",v]));
+    rows.push(["TOTAL GASTOS","",tGMes]);
+    rows.push(["RESULTADO NETO","",balMes]);
+    rows.push([]);
+    // KPIs histórico
+    rows.push(["=== RESUMEN HISTÓRICO ACUMULADO ==="]);
+    rows.push(["Concepto","Monto"]);
+    rows.push(["Ingresos Histórico",tIHist]);
+    rows.push(["Gastos Histórico",tGHist]);
+    rows.push(["Balance Histórico",balHist]);
+    rows.push(["ROI Histórico (%)",roiHist]);
+    rows.push([]);
+    // P&L Histórico
+    rows.push(["=== P&L HISTÓRICO COMPLETO ==="]);
+    rows.push(["Categoría","Tipo","Monto"]);
+    Object.entries(catIngHist).forEach(([c,v])=>rows.push([c,"Ingreso",v]));
+    rows.push(["TOTAL INGRESOS","",tIHist]);
+    Object.entries(catGasHist).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>rows.push([c,"Gasto",v]));
+    rows.push(["TOTAL GASTOS","",tGHist]);
+    rows.push(["RESULTADO NETO","",balHist]);
+    rows.push([]);
+    // Comparativo
     if(mes){
-      wsResumen.push(["COMPARATIVO: "+mesLabel.toUpperCase()+" vs HISTÓRICO",""]);
-      wsResumen.push(["Concepto",mesLabel,"Histórico","Diferencia"]);
-      wsResumen.push(["Ingresos",tIMes,tIHist,tIMes-tIHist]);
-      wsResumen.push(["Gastos",tGMes,tGHist,tGMes-tGHist]);
-      wsResumen.push(["Balance",balMes,balHist,balMes-balHist]);
-      wsResumen.push(["ROI (%)",Number(roiMes),Number(roiHist),""]);
-      wsResumen.push(["",""]);
+      rows.push(["=== COMPARATIVO: "+mesLabel.toUpperCase()+" vs HISTÓRICO ==="]);
+      rows.push(["Concepto",mesLabel,"Histórico","Diferencia"]);
+      rows.push(["Ingresos",tIMes,tIHist,tIMes-tIHist]);
+      rows.push(["Gastos",tGMes,tGHist,tGMes-tGHist]);
+      rows.push(["Balance",balMes,balHist,balMes-balHist]);
+      rows.push(["ROI (%)",roiMes,roiHist,(Number(roiMes)-Number(roiHist)).toFixed(2)]);
+      rows.push([]);
     }
-    wsResumen.push(["APORTACIONES POR SOCIO / NEGOCIO",""]);
-    wsResumen.push(["Fuente",mesLabel,"Histórico"]);
-    Object.entries(socHist).forEach(([s,vh])=>wsResumen.push([s,socMes[s]||0,vh]));
-    const shResumen=XLSX.utils.aoa_to_sheet(wsResumen);
-    shResumen["!cols"]=[{wch:38},{wch:16},{wch:16},{wch:16}];
-    XLSX.utils.book_append_sheet(wb,shResumen,"Resumen");
+    // Socios
+    rows.push(["=== APORTACIONES POR SOCIO / NEGOCIO ==="]);
+    rows.push(["Fuente",mesLabel,"Histórico"]);
+    Object.entries(socHist).forEach(([s,vh])=>rows.push([s,socMes[s]||0,vh]));
+    rows.push([]);
+    // Detalle gastos
+    rows.push(["=== DETALLE GASTOS "+mesLabel.toUpperCase()+" ==="]);
+    rows.push(["Fecha","Categoría","Descripción","Módulo","Pagado por","Monto"]);
+    gMes.forEach(g=>rows.push([g.fecha,g.categoria,g.descripcion||"—",g.modulo||"—",g.pagado_por||"—",Number(g.monto)]));
+    rows.push([]);
+    // Detalle ingresos
+    rows.push(["=== DETALLE INGRESOS "+mesLabel.toUpperCase()+" ==="]);
+    rows.push(["Fecha","Categoría","Descripción","Módulo","Monto"]);
+    iMes.forEach(i=>rows.push([i.fecha,i.categoria,i.descripcion||"—",i.modulo||"—",Number(i.monto)]));
 
-    // ── HOJA 2: P&L ──────────────────────────────────────────────────────────
-    const wsPL=[];
-    wsPL.push(["ESTADO DE RESULTADOS (P&L) — "+mesLabel.toUpperCase()]);
-    wsPL.push([""]);
-    wsPL.push(["Concepto","Tipo","Monto ($)"]);
-    Object.entries(catIngMes).forEach(([c,v])=>wsPL.push([c,"Ingreso",v]));
-    wsPL.push(["TOTAL INGRESOS","",tIMes]);
-    wsPL.push([""]);
-    Object.entries(catGasMes).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>wsPL.push([c,"Gasto",v]));
-    wsPL.push(["TOTAL GASTOS","",tGMes]);
-    wsPL.push([""]);
-    wsPL.push(["RESULTADO NETO","",balMes]);
-    if(mes){
-      wsPL.push([""]);
-      wsPL.push(["P&L HISTÓRICO COMPLETO"]);
-      wsPL.push([""]);
-      wsPL.push(["Concepto","Tipo","Monto ($)"]);
-      Object.entries(catIngHist).forEach(([c,v])=>wsPL.push([c,"Ingreso",v]));
-      wsPL.push(["TOTAL INGRESOS","",tIHist]);
-      wsPL.push([""]);
-      Object.entries(catGasHist).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>wsPL.push([c,"Gasto",v]));
-      wsPL.push(["TOTAL GASTOS","",tGHist]);
-      wsPL.push([""]);
-      wsPL.push(["RESULTADO NETO HISTÓRICO","",balHist]);
-    }
-    const shPL=XLSX.utils.aoa_to_sheet(wsPL);
-    shPL["!cols"]=[{wch:42},{wch:12},{wch:16}];
-    XLSX.utils.book_append_sheet(wb,shPL,"P&L");
-
-    // ── HOJA 3: DETALLE GASTOS ────────────────────────────────────────────────
-    const wsGastos=[["DETALLE DE GASTOS — "+mesLabel.toUpperCase()],[""],
-      ["Fecha","Categoría","Descripción","Módulo","Pagado por","Monto ($)"]];
-    gMes.slice().sort((a,b)=>a.fecha>b.fecha?-1:1)
-        .forEach(g=>wsGastos.push([g.fecha,g.categoria,g.descripcion||"—",g.modulo||"—",g.pagado_por||"—",Number(g.monto)]));
-    wsGastos.push(["","","","","TOTAL",tGMes]);
-    const shGastos=XLSX.utils.aoa_to_sheet(wsGastos);
-    shGastos["!cols"]=[{wch:12},{wch:32},{wch:40},{wch:12},{wch:14},{wch:12}];
-    XLSX.utils.book_append_sheet(wb,shGastos,"Detalle Gastos");
-
-    // ── HOJA 4: DETALLE INGRESOS ──────────────────────────────────────────────
-    const wsIngresos=[["DETALLE DE INGRESOS — "+mesLabel.toUpperCase()],[""],
-      ["Fecha","Categoría","Descripción","Módulo","Monto ($)"]];
-    iMes.slice().sort((a,b)=>a.fecha>b.fecha?-1:1)
-        .forEach(i=>wsIngresos.push([i.fecha,i.categoria,i.descripcion||"—",i.modulo||"—",Number(i.monto)]));
-    wsIngresos.push(["","","","TOTAL",tIMes]);
-    const shIngresos=XLSX.utils.aoa_to_sheet(wsIngresos);
-    shIngresos["!cols"]=[{wch:12},{wch:32},{wch:40},{wch:12},{wch:12}];
-    XLSX.utils.book_append_sheet(wb,shIngresos,"Detalle Ingresos");
-
-    // ── HOJA 5: DATOS PARA GRÁFICOS ───────────────────────────────────────────
-    const mesesConDatos=[...new Set([...gastos,...ingresos].map(x=>x.anio*100+x.mes))].sort();
-    const wsChart=[["Evolución Mensual — Datos para Gráficos"],[""],
-      ["Mes","Ingresos ($)","Gastos ($)","Balance ($)"]];
-    mesesConDatos.forEach(ym=>{
-      const y=Math.floor(ym/100),m=ym%100;
-      const etiq=`${MESES_FULL[m]} ${y}`;
-      const ing=ingresos.filter(x=>x.anio===y&&x.mes===m).reduce((s,x)=>s+Number(x.monto),0);
-      const gas=gastos.filter(x=>x.anio===y&&x.mes===m).reduce((s,x)=>s+Number(x.monto),0);
-      wsChart.push([etiq,ing,gas,ing-gas]);
-    });
-    wsChart.push([""]);
-    wsChart.push(["Distribución Gastos (Histórico)",""]);
-    wsChart.push(["Categoría","Monto ($)"]);
-    Object.entries(catGasHist).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>wsChart.push([c,v]));
-    wsChart.push([""]);
-    wsChart.push(["Distribución Ingresos (Histórico)",""]);
-    wsChart.push(["Categoría","Monto ($)"]);
-    Object.entries(catIngHist).forEach(([c,v])=>wsChart.push([c,v]));
-    const shChart=XLSX.utils.aoa_to_sheet(wsChart);
-    shChart["!cols"]=[{wch:20},{wch:14},{wch:14},{wch:14}];
-    XLSX.utils.book_append_sheet(wb,shChart,"Datos Gráficos");
-
-    XLSX.writeFile(wb,`FincaNavas_Cierre_${mesLabel.replace(/ /g,"_")}.xlsx`);
+    const csv="\uFEFF"+rows.map(r=>r.map(c=>typeof c==="number"?c:esc(c||"\u2014")).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download=`FincaNavas_Cierre_${mesLabel.replace(" ","_")}.csv`;
+    a.click();URL.revokeObjectURL(url);
   };
 
   return <div>
@@ -1727,10 +1775,6 @@ function CerdosModule({role,toast,userId,userName,onRefreshAll}){
       const {error}=await supabase.from(tabla).delete().eq("id",id);
       if(error)toast(error.message,"error");
       else{
-        // Si era una venta porcina, limpiar ingreso vinculado en finanzas
-        if(tabla==="ventas_lechones"){
-          await supabase.from("ingresos").delete().eq("venta_id",id);
-        }
         await logAudit({userId,userName,accion:"eliminar",tabla,registroId:id});
         toast("Eliminado ✓");
         await fetchPorcino(false);
@@ -1740,64 +1784,32 @@ function CerdosModule({role,toast,userId,userName,onRefreshAll}){
   };
 
   // Sincronizar venta con tabla ingresos
-  // Regla: Abonos NO generan ingreso (pagos parciales pendientes)
-  // Regla: Abono→Venta crea ingreso; Venta→Abono borra ingreso
   const syncIngreso=async(venta,ventaId,accion="insertar")=>{
     try{
-      // GUARD: Abonos nunca sincronizan como ingreso
-      if(venta.estatus==="Abono"){
-        if(accion==="actualizar"&&ventaId){
-          await supabase.from("ingresos").delete().eq("venta_id",ventaId);
-        }
-        return;
-      }
       const fecha=venta.fecha;
       const dt=new Date(fecha+"T12:00:00");
       const cat=venta.tipo==="Cerda"?"Ingresos por ventas (Cerdas Madres)":
                 venta.tipo==="Monta"?"Ingresos por Monta":"Ingresos por ventas (Lechones)";
       const desc=`Venta ${venta.cantidad||1} ${venta.tipo||"lechón(es)"} – ${venta.comprador||""} – ${venta.notas||""}`.trim().replace(/–\s*$/,"");
-      const monto=Number(venta.total||venta.precio_unit*venta.cantidad||0);
       if(accion==="insertar"){
         await supabase.from("ingresos").insert({
           fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
           categoria:cat,descripcion:desc,
-          monto,modulo:"Cerdos",venta_id:ventaId
+          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
+          modulo:"Cerdos",venta_id:ventaId
         });
       } else if(accion==="actualizar"&&ventaId){
-        // Si ya existe el ingreso actualizar; si no (venía de Abono→Venta) insertar
-        const{data:existing}=await supabase.from("ingresos").select("id").eq("venta_id",ventaId).maybeSingle();
-        if(existing){
-          await supabase.from("ingresos").update({
-            fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
-            categoria:cat,descripcion:desc,monto,
-          }).eq("venta_id",ventaId);
-        } else {
-          await supabase.from("ingresos").insert({
-            fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
-            categoria:cat,descripcion:desc,
-            monto,modulo:"Cerdos",venta_id:ventaId
-          });
-        }
+        await supabase.from("ingresos").update({
+          fecha,mes:dt.getMonth()+1,anio:dt.getFullYear(),
+          categoria:cat,descripcion:desc,
+          monto:Number(venta.total||venta.precio_unit*venta.cantidad||0),
+        }).eq("venta_id",ventaId);
       }
     }catch(e){console.warn("syncIngreso error:",e.message);}
   };
 
   const openEdit=(tipo,item)=>{setEditItem({tipo,...item});setForm({...item});setModal("edit_"+tipo);};
-
-  // Genera el próximo código de cerda en formato C-001, C-002, ...
-  const nextCodigoCerda=()=>{
-    const nums=cerdas
-      .map(c=>{ const m=(c.codigo||"").match(/^C-(\d+)$/i); return m?parseInt(m[1],10):0; })
-      .filter(n=>n>0);
-    const next=nums.length>0?Math.max(...nums)+1:1;
-    return "C-"+String(next).padStart(3,"0");
-  };
-
-  const openNew=(tipo,defaults={})=>{
-    const extra=tipo==="cerda"?{codigo:nextCodigoCerda()}:{};
-    setForm({...extra,...defaults});
-    setModal("new_"+tipo);
-  };
+  const openNew=(tipo,defaults={})=>{setForm({...defaults});setModal("new_"+tipo);};
 
   if(loading)return <Loading msg="Cargando datos porcinos..." onRetry={()=>fetchPorcino()}/>;
 
@@ -2681,6 +2693,27 @@ function UsuariosPage({toast,userId,userName}){
   const [saving,setSaving]=useState(false);
   const [editNombre,setEditNombre]=useState(null); // id del perfil editando nombre
   const [tmpNombre,setTmpNombre]=useState("");
+  const [backing,setBacking]=useState(null); // tabla en proceso durante el respaldo
+  const [ultimoBackup,setUltimoBackup]=useState(()=>{try{return localStorage.getItem("gosh_ultimo_backup")||"";}catch(e){return "";}});
+
+  const hacerRespaldo=async()=>{
+    setBacking("iniciando");
+    try{
+      const data=await exportarRespaldo(t=>setBacking(t));
+      const hoy=new Date().toISOString().slice(0,10);
+      const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");a.href=url;a.download=`gosh-backup-${hoy}.json`;
+      document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+      try{localStorage.setItem("gosh_ultimo_backup",hoy);}catch(e){}
+      setUltimoBackup(hoy);
+      const total=Object.values(data.tablas).reduce((s,r)=>s+r.length,0);
+      await logAudit({userId,userName,accion:"respaldo",tabla:"(todas)",registroId:null,datosNuevos:{registros:total}});
+      toast(`Respaldo descargado ✓ (${total} registros)`);
+    }catch(e){toast(`Respaldo falló: ${e.message}`,"error");}
+    finally{setBacking(null);}
+  };
+  const diasDesdeBackup=ultimoBackup?Math.floor((Date.now()-new Date(ultimoBackup+"T12:00:00").getTime())/86400000):null;
 
   const fetch=async()=>{
     setLoading(true);
@@ -2761,6 +2794,22 @@ function UsuariosPage({toast,userId,userName}){
       </table></div>}
     </div>
 
+    <div className="card mb4">
+      <div className="card-h"><h3>💾 Respaldo de Datos</h3></div>
+      <div className="card-b">
+        <p style={{fontSize:13,color:G.g700,marginBottom:10}}>
+          Descarga un archivo <strong>.json</strong> con todas las tablas (finanzas, cerdos, ñame, deudas, inventario, usuarios y auditoría). Guárdalo en Google Drive o en tu disco.
+        </p>
+        <p style={{fontSize:12,color:diasDesdeBackup===null||diasDesdeBackup>7?G.red:G.g500,marginBottom:12}}>
+          {ultimoBackup?`Último respaldo desde este dispositivo: ${ultimoBackup} (hace ${diasDesdeBackup} día${diasDesdeBackup===1?"":"s"})${diasDesdeBackup>7?" — toca respaldar":""}`:"Aún no has hecho un respaldo desde este dispositivo."}
+        </p>
+        <button className="btn btn-p" onClick={hacerRespaldo} disabled={!!backing}>
+          {backing?`Exportando ${backing}...`:"⬇ Descargar respaldo"}
+        </button>
+        <p style={{fontSize:11,color:G.g500,marginTop:10}}>No incluye los archivos adjuntos (soportes); esos viven en Storage.</p>
+      </div>
+    </div>
+
     <div className="card">
       <div className="card-h"><h3>📋 Permisos por Rol</h3></div>
       <div className="card-b">
@@ -2811,7 +2860,7 @@ function AuditoriaPage({toast}){
 
   const ACCION_LABEL={
     insertar:"➕ Registro",cambio_rol:"🔑 Cambio rol",actualizar:"✏️ Edición",
-    completar_actividad:"✓ Actividad",registrar_gasto:"💸 Gasto",eliminar:"🗑️ Eliminación"
+    completar_actividad:"✓ Actividad",registrar_gasto:"💸 Gasto",eliminar:"🗑️ Eliminación",respaldo:"💾 Respaldo"
   };
   const fmtDT=d=>d?new Date(d).toLocaleString("es-PA",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"-";
   const tablas=[...new Set(logs.map(l=>l.tabla))];
